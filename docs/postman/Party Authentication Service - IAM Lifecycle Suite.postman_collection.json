@@ -1,0 +1,770 @@
+{
+  "info": {
+    "_postman_id": "b3c5d7e9-2f4a-4b6c-8d0e-3f5a7b9c1d2e",
+    "name": "Party Authentication Service - IAM Lifecycle Suite",
+    "description": "Enterprise-grade E2E Postman Suite for the Party Authentication Service Domain (BIAN-aligned, ADR-001/005/013/016). Covers the complete User (tenant operator) lifecycle under /party-authentication/v1 (initiate, retrieve, update, control/activate|suspend|deactivate), tenant-scoped and status-filtered listing, mandatory X-Tenant-Id/X-Executor auditing, RFC 7807 error_code assertions, and automated W3C distributed traceparent correlation. Requires an `organisationId` environment variable populated from the Party Reference Data Directory Service Domain (company-service) — every User is scoped to an existing Organisation tenant.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "39879181"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Automatically generate standard W3C traceparent (ADR-010) and X-Trace-Id",
+          "function generateHex(len) {",
+          "    let result = '';",
+          "    const chars = '0123456789abcdef';",
+          "    for (let i = 0; i < len; i++) {",
+          "        result += chars.charAt(Math.floor(Math.random() * chars.length));",
+          "    }",
+          "    return result;",
+          "}",
+          "const traceId = generateHex(32);",
+          "const spanId = generateHex(16);",
+          "const traceparent = `00-${traceId}-${spanId}-01`;",
+          "pm.request.headers.upsert({ key: 'traceparent', value: traceparent });",
+          "pm.request.headers.upsert({ key: 'X-Trace-Id', value: traceId });",
+          "pm.environment.set('currentTraceId', traceId);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00. Infrastructure & Telemetry",
+      "item": [
+        {
+          "name": "Health Check (Aggregated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Health status is UP', () => pm.expect(json.status).to.eql('UP'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Liveness Probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Liveness status is UP', () => pm.expect(json.status).to.eql('UP'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/liveness",
+              "host": ["{{base_url}}"],
+              "path": ["health", "liveness"]
+            }
+          }
+        },
+        {
+          "name": "Readiness Probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Readiness status is UP', () => pm.expect(json.status).to.eql('UP'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/readiness",
+              "host": ["{{base_url}}"],
+              "path": ["health", "readiness"]
+            }
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Contains JVM metrics', () => pm.expect(pm.response.text()).to.include('jvm_memory'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/prometheus",
+              "host": ["{{base_url}}"],
+              "path": ["prometheus"]
+            }
+          }
+        },
+        {
+          "name": "Swagger UI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns Swagger UI HTML', () => pm.expect(pm.response.text()).to.include('swagger-ui'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/swagger-ui",
+              "host": ["{{base_url}}"],
+              "path": ["swagger-ui"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01. Lifecycle Scenarios (BIAN Behavior Qualifiers)",
+      "item": [
+        {
+          "name": "01. Initiate User (Control Record)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('UUID and fullName are present, status is PENDING', () => {",
+                  "    pm.expect(json.id).to.not.be.undefined;",
+                  "    pm.expect(json.fullName).to.eql('Linus Torvalds');",
+                  "    pm.expect(json.status).to.eql('PENDING');",
+                  "});",
+                  "pm.environment.set('userId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Linus Torvalds\",\n  \"email\": \"linus.torvalds@thinklab.com\",\n  \"role\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/initiate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "02. Retrieve User By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('User matches created ID', () => {",
+                  "    pm.expect(json.id).to.eql(pm.environment.get('userId'));",
+                  "    pm.expect(json.status).to.eql('PENDING');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/retrieve",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "retrieve"]
+            }
+          }
+        },
+        {
+          "name": "03. Control: Activate User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/control/activate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "control", "activate"]
+            }
+          }
+        },
+        {
+          "name": "04. Retrieve User By ID (Confirm ACTIVE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Status transitioned to ACTIVE', () => pm.expect(json.status).to.eql('ACTIVE'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/retrieve",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "retrieve"]
+            }
+          }
+        },
+        {
+          "name": "05. Update User (Basic Info)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Linus B. Torvalds\",\n  \"role\": \"OPERATOR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/update",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "update"]
+            }
+          }
+        },
+        {
+          "name": "06. Retrieve All Users (Tenant Scoped)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Contains the updated user with new role', () => {",
+                  "    pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "    const user = json.find(u => u.id === pm.environment.get('userId'));",
+                  "    pm.expect(user).to.not.be.undefined;",
+                  "    pm.expect(user.role).to.eql('OPERATOR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/retrieve",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "retrieve"]
+            }
+          }
+        },
+        {
+          "name": "07. Retrieve All Users Filtered By Status=ACTIVE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Every returned user is ACTIVE and includes ours', () => {",
+                  "    pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "    json.forEach(u => pm.expect(u.status).to.eql('ACTIVE'));",
+                  "    pm.expect(json.some(u => u.id === pm.environment.get('userId'))).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/retrieve?status=ACTIVE",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "retrieve"],
+              "query": [{ "key": "status", "value": "ACTIVE" }]
+            }
+          }
+        },
+        {
+          "name": "08. Control: Suspend User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/control/suspend",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "control", "suspend"]
+            }
+          }
+        },
+        {
+          "name": "09. Retrieve All Users Filtered By Status=SUSPENDED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Our user is present as SUSPENDED', () => {",
+                  "    const user = json.find(u => u.id === pm.environment.get('userId'));",
+                  "    pm.expect(user).to.not.be.undefined;",
+                  "    pm.expect(user.status).to.eql('SUSPENDED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/retrieve?status=SUSPENDED",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "retrieve"],
+              "query": [{ "key": "status", "value": "SUSPENDED" }]
+            }
+          }
+        },
+        {
+          "name": "10. Control: Reactivate User (SUSPENDED -> ACTIVE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/control/activate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "control", "activate"]
+            }
+          }
+        },
+        {
+          "name": "11. Control: Deactivate User (Terminal, replaces DELETE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/control/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "control", "deactivate"]
+            }
+          }
+        },
+        {
+          "name": "12. Retrieve User By ID (Confirm DEACTIVATED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Status is terminally DEACTIVATED', () => pm.expect(json.status).to.eql('DEACTIVATED'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/retrieve",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "retrieve"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Negative Tests & Boundary Validation",
+      "item": [
+        {
+          "name": "01. Initiate User - Blank Full Name (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 problem details structure', () => {",
+                  "    pm.expect(json.status).to.eql(400);",
+                  "    pm.expect(json.error_code).to.eql('ERR-VALIDATION-00400');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"\",\n  \"email\": \"no.name@thinklab.com\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/initiate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "02. Initiate User - Invalid Email Format (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-VALIDATION-00400', () => pm.expect(json.error_code).to.eql('ERR-VALIDATION-00400'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Invalid Email User\",\n  \"email\": \"not-an-email\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/initiate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "03. Initiate User - Missing X-Tenant-Id Header (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"No Tenant Header\",\n  \"email\": \"no.tenant@thinklab.com\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/initiate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "04. Initiate User - Duplicate Email In Same Organisation (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 409 Conflict', () => pm.response.to.have.status(409));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00409', () => pm.expect(json.error_code).to.eql('ERR-USR-00409'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Linus Torvalds Duplicate\",\n  \"email\": \"linus.torvalds@thinklab.com\",\n  \"role\": \"VIEWER\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/initiate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "05. Retrieve User - Non-existent UUID (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404 Not Found', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00404', () => {",
+                  "    pm.expect(json.status).to.eql(404);",
+                  "    pm.expect(json.error_code).to.eql('ERR-USR-00404');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/00000000-0000-0000-0000-000000000000/retrieve",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "00000000-0000-0000-0000-000000000000", "retrieve"]
+            }
+          }
+        },
+        {
+          "name": "06. Initiate User for Illegal-Transition Test (Setup)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('New PENDING user created', () => pm.expect(json.status).to.eql('PENDING'));",
+                  "pm.environment.set('illegalTransitionUserId', json.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Tenant-Id", "value": "{{organisationId}}" },
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"ada.lovelace@thinklab.com\",\n  \"role\": \"OPERATOR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/initiate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "initiate"]
+            }
+          }
+        },
+        {
+          "name": "07. Control: Suspend a PENDING User - Illegal Transition (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 409 Conflict', () => pm.response.to.have.status(409));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00409', () => pm.expect(json.error_code).to.eql('ERR-USR-00409'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{illegalTransitionUserId}}/control/suspend",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{illegalTransitionUserId}}", "control", "suspend"]
+            }
+          }
+        },
+        {
+          "name": "08. Control: Activate Already-DEACTIVATED User - Terminal Violation (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 409 Conflict', () => pm.response.to.have.status(409));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00409', () => pm.expect(json.error_code).to.eql('ERR-USR-00409'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Executor", "value": "{{executor}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/party-authentication/v1/{{userId}}/control/activate",
+              "host": ["{{base_url}}"],
+              "path": ["party-authentication", "v1", "{{userId}}", "control", "activate"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8082"
+    }
+  ]
+}
