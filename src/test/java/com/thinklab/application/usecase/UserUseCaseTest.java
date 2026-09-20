@@ -109,6 +109,7 @@ class UserUseCaseTest {
     void testUpdateUserUseCase() {
         UpdateUserUseCase useCase = new UpdateUserUseCase(userRepository);
         UpdateUserRequest request = new UpdateUserRequest("Ada L.", UserRole.ADMIN);
+        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
         when(userRepository.updateBasicInfo(userId, "Ada L.", UserRole.ADMIN)).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.execute(userId, request))

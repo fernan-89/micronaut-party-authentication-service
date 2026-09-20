@@ -90,6 +90,9 @@ public class User {
     // --- Domain Behaviors (State Mutations) ---
 
     public void updateProfile(String fullName, UserRole role) {
+        if (this.status == UserStatus.DEACTIVATED) {
+            throw new InvalidUserStatusException("Compliance Violation: cannot update a DEACTIVATED user; the lifecycle is terminal.");
+        }
         if (fullName == null || fullName.isBlank() || role == null) {
             throw new IllegalArgumentException("Full Name and Role cannot be empty.");
         }
