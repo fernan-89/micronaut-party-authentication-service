@@ -23,9 +23,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -91,13 +91,13 @@ public class UserController {
 
     /** Behavior Qualifier: {@code retrieve} (collection). Lists Users scoped to a tenant. */
     @Get("/retrieve")
-    public Flux<UserResponse> retrieveAll(
+    public Mono<List<UserResponse>> retrieveAll(
             @Header(TENANT_HEADER) @NotBlank String tenantId,
             @QueryValue @Nullable UserStatus status
     ) {
         log.info("[ACTION: RETRIEVE_USERS] Received request to list users for organisation: {} status: {}", tenantId, status);
 
-        return retrieveUsersUseCase.execute(UUID.fromString(tenantId), status);
+        return Mono.defer(() -> retrieveUsersUseCase.execute(UUID.fromString(tenantId), status).collectList());
     }
 
     /** Behavior Qualifier: {@code update}. Updates basic User info. */

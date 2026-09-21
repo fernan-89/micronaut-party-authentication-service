@@ -25,6 +25,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -118,14 +119,14 @@ class UserControllerTest {
         when(retrieveUsersUseCase.execute(organisationId, UserStatus.ACTIVE)).thenReturn(Flux.just(sample));
         when(retrieveUsersUseCase.execute(organisationId, null)).thenReturn(Flux.just(sample, sample));
 
-        StepVerifier.create(controller.retrieveAll(organisationId.toString(), UserStatus.ACTIVE)).expectNext(sample).verifyComplete();
-        StepVerifier.create(controller.retrieveAll(organisationId.toString(), null)).expectNextCount(2).verifyComplete();
+        StepVerifier.create(controller.retrieveAll(organisationId.toString(), UserStatus.ACTIVE)).expectNext(List.of(sample)).verifyComplete();
+        StepVerifier.create(controller.retrieveAll(organisationId.toString(), null)).assertNext(list -> assertEquals(2, list.size())).verifyComplete();
     }
 
     @Test
     @DisplayName("retrieveAll rejects a malformed tenant header")
     void retrieveAllMalformedTenant() {
-        assertThrows(IllegalArgumentException.class, () -> controller.retrieveAll("nope", null));
+        StepVerifier.create(controller.retrieveAll("nope", null)).expectError(IllegalArgumentException.class).verify();
     }
 
     @Test
