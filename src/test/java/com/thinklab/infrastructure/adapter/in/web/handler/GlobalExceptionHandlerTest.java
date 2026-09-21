@@ -114,4 +114,14 @@ class GlobalExceptionHandlerTest {
         Mockito.when(request.getAttribute(Mockito.eq("traceId"), Mockito.eq(String.class))).thenReturn(Optional.of("attr-trace"));
         assertProblem(exceptionHandler.handle(request, new UserNotFoundException("x")), HttpStatus.NOT_FOUND, "ERR-USR-00404");
     }
+
+    @Test
+    @DisplayName("a trace id from the X-Trace-Id header is honoured and a blank one replaced")
+    void traceIdFromHeader() {
+        Mockito.when(headers.get("X-Trace-Id")).thenReturn("header-trace");
+        assertEquals(404, exceptionHandler.handle(request, new com.thinklab.domain.exception.UserNotFoundException("x")).getStatus().getCode());
+
+        Mockito.when(headers.get("X-Trace-Id")).thenReturn(" ");
+        assertEquals(404, exceptionHandler.handle(request, new com.thinklab.domain.exception.UserNotFoundException("x")).getStatus().getCode());
+    }
 }
