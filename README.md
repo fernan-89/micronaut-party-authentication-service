@@ -110,3 +110,7 @@ docker build -t thinklab-party-authentication-service:latest .
 
 `docs/adr/`: 001 hexagonal reactive stack · 005 UUID identity sovereignty · 013 BIAN service domain
 conventions · 016 party authentication domain model.
+
+## License
+
+Proprietary - all rights reserved. See [LICENSE](LICENSE). This software is not open source.
