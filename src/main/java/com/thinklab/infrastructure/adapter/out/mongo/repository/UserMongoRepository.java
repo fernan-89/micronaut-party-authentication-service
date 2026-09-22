@@ -22,6 +22,8 @@ public interface UserMongoRepository extends ReactorCrudRepository<UserEntity, U
 
     Mono<Boolean> existsByOrganisationIdAndEmail(UUID organisationId, String email);
 
+    Mono<UserEntity> findByOrganisationIdAndEmail(UUID organisationId, String email);
+
     Flux<UserEntity> findByOrganisationId(UUID organisationId);
 
     Flux<UserEntity> findByOrganisationIdAndStatus(UUID organisationId, UserStatus status);

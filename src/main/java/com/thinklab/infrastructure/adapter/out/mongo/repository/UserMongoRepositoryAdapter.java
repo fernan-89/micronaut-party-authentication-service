@@ -73,6 +73,13 @@ public class UserMongoRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Mono<User> findByOrganisationIdAndEmail(UUID organisationId, String email) {
+        Objects.requireNonNull(organisationId, "Infrastructure constraint violated: Organisation ID is mandatory.");
+        Objects.requireNonNull(email, "Infrastructure constraint violated: Email is mandatory.");
+        return repository.findByOrganisationIdAndEmail(organisationId, email).map(UserEntity::toDomain);
+    }
+
+    @Override
     public Mono<Void> updateBasicInfo(UUID id, String fullName, UserRole role) {
         return repository.findById(id)
                 .switchIfEmpty(Mono.error(new UserNotFoundException(id)))

@@ -49,4 +49,7 @@ public interface UserRepository {
      * @return A {@link Mono} emitting {@code true} if a User with this email already exists for this Organisation.
      */
     Mono<Boolean> existsByOrganisationIdAndEmail(UUID organisationId, String email);
+
+    /** Emits the user of the organisation with the given email, or completes empty. */
+    Mono<User> findByOrganisationIdAndEmail(UUID organisationId, String email);
 }

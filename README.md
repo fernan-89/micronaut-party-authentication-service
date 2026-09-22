@@ -67,6 +67,8 @@ PENDING | ACTIVE | SUSPENDED -> DEACTIVATED (terminal, no exit, no DELETE)
 | error_code | HTTP | Meaning |
 |---|---|---|
 | `ERR-USR-00404` | 404 | User not found |
+| `ERR-USR-00401` | 401 | Invalid credentials (generic: unknown user, no password, wrong password or inactive user) |
+| `ERR-USR-00403` | 403 | Only an administrator or the user themselves may change a credential (ADR-020) |
 | `ERR-USR-00409` | 409 | Duplicate email in the Organisation, or illegal/idempotent lifecycle transition |
 | `ERR-VALIDATION-00400` | 400 | Payload/header/identifier validation failure (including a malformed `X-Tenant-Id`) |
 | `ERR-INTERNAL-00500` | 500 | Unexpected technical failure |
@@ -110,7 +112,16 @@ docker build -t thinklab-party-authentication-service:latest .
 
 `docs/adr/`: 001 hexagonal reactive stack · 005 UUID identity sovereignty · 013 BIAN service domain
 conventions · 016 party authentication domain model.
+## Authentication (ADR-020)
+
+| Route | Purpose |
+|---|---|
+| `POST /party-authentication/v1/session/initiate` | Public login: `{organisationId, email, password}` returns `{accessToken, tokenType, expiresIn}` |
+| `PUT /party-authentication/v1/{id}/credential/update` | Sets or replaces the password (Argon2id, 12-128 characters); admin or the user themselves |
+
+Security is enabled per environment with `THINKLAB_SECURITY_ENABLED=true` and a shared `THINKLAB_JWT_SECRET` (>= 32 bytes).
 
 ## License
 
 Proprietary - all rights reserved. See [LICENSE](LICENSE). This software is not open source.
+
