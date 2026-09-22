@@ -1115,7 +1115,8 @@
                   "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
                   "pm.test('New PENDING user created', () => pm.expect(json.status).to.eql('PENDING'));",
-                  "pm.environment.set('illegalTransitionUserId', json.id);"
+                  "pm.environment.set('illegalTransitionUserId', json.id);",
+                  "pm.environment.set('illegalTransitionEmail', json.email);"
                 ],
                 "type": "text/javascript"
               }
@@ -1276,6 +1277,344 @@
         }
       ],
       "name": "02. Negative Tests & Boundary Validation"
+    },
+    {
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "01. Credential: Set Password (204)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"A-very-long-passphrase-1\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{organisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "{{illegalTransitionUserId}}",
+                "credential",
+                "update"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/{{illegalTransitionUserId}}/credential/update"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-VALIDATION-00400', () => {",
+                  "    pm.expect(json.status).to.eql(400);",
+                  "    pm.expect(json.error_code).to.eql('ERR-VALIDATION-00400');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "02. Credential: Password Too Short (400)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"short\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{organisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "{{illegalTransitionUserId}}",
+                "credential",
+                "update"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/{{illegalTransitionUserId}}/credential/update"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00404', () => {",
+                  "    pm.expect(json.status).to.eql(404);",
+                  "    pm.expect(json.error_code).to.eql('ERR-USR-00404');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "03. Credential: Unknown User (404)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"A-very-long-passphrase-1\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{organisationId}}"
+              },
+              {
+                "key": "X-Executor",
+                "value": "{{executor}}"
+              }
+            ],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "00000000-0000-0000-0000-000000000000",
+                "credential",
+                "update"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/00000000-0000-0000-0000-000000000000/credential/update"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00401', () => {",
+                  "    pm.expect(json.status).to.eql(401);",
+                  "    pm.expect(json.error_code).to.eql('ERR-USR-00401');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "04. Session: Wrong Password (401)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": \"{{organisationId}}\",\n  \"email\": \"{{illegalTransitionEmail}}\",\n  \"password\": \"not-the-right-password\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "initiate"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/initiate"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00401', () => {",
+                  "    pm.expect(json.status).to.eql(401);",
+                  "    pm.expect(json.error_code).to.eql('ERR-USR-00401');",
+                  "});",
+                  "pm.test('Detail does not reveal which part was wrong', () => pm.expect(json.detail).to.eql('Invalid credentials.'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "05. Session: Unknown User (401, same generic error)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": \"{{organisationId}}\",\n  \"email\": \"nobody@thinklab.com\",\n  \"password\": \"A-very-long-passphrase-1\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "initiate"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/initiate"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-VALIDATION-00400', () => {",
+                  "    pm.expect(json.status).to.eql(400);",
+                  "    pm.expect(json.error_code).to.eql('ERR-VALIDATION-00400');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "06. Session: Missing Organisation (400)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"x@thinklab.com\",\n  \"password\": \"A-very-long-passphrase-1\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "initiate"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/initiate"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Bearer token with a three-part JWT and a positive lifetime', () => {",
+                  "    pm.expect(json.tokenType).to.eql('Bearer');",
+                  "    pm.expect(json.accessToken.split('.')).to.have.lengthOf(3);",
+                  "    pm.expect(json.expiresIn).to.be.above(0);",
+                  "});",
+                  "pm.environment.set('sessionToken', json.accessToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "07. Session: Initiate (200, bearer token)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": \"{{organisationId}}\",\n  \"email\": \"{{illegalTransitionEmail}}\",\n  \"password\": \"A-very-long-passphrase-1\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "initiate"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/initiate"
+            }
+          }
+        }
+      ],
+      "name": "03. Credentials & Sessions (ADR-020)"
     }
   ],
   "variable": [
