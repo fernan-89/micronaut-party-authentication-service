@@ -27,8 +27,11 @@ public class ControlUserUseCase {
 
     private final UserRepository userRepository;
 
-    public ControlUserUseCase(UserRepository userRepository) {
+    private final SessionRevoker sessionRevoker;
+
+    public ControlUserUseCase(UserRepository userRepository, SessionRevoker sessionRevoker) {
         this.userRepository = userRepository;
+        this.sessionRevoker = sessionRevoker;
     }
 
     public Mono<Void> execute(UUID id, Action action) {
@@ -38,7 +41,9 @@ public class ControlUserUseCase {
                 .switchIfEmpty(Mono.error(new UserNotFoundException(id)))
                 .flatMap(user -> {
                     action.apply(user);
-                    return userRepository.updateStatus(id, action.targetStatus());
+                    Mono<Void> update = userRepository.updateStatus(id, action.targetStatus());
+                    // A suspended or deactivated user must lose every open session immediately.
+                    return action == Action.ACTIVATE ? update : update.then(sessionRevoker.revokeAllOf(id));
                 });
     }
 

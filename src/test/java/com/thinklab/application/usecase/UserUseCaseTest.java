@@ -118,7 +118,7 @@ class UserUseCaseTest {
 
     @Test
     void testControlUserUseCaseActivate() {
-        ControlUserUseCase useCase = new ControlUserUseCase(userRepository);
+        ControlUserUseCase useCase = new ControlUserUseCase(userRepository, noopRevoker());
         when(userRepository.findById(userId)).thenReturn(Mono.just(user));
         when(userRepository.updateStatus(userId, UserStatus.ACTIVE)).thenReturn(Mono.empty());
 
@@ -128,7 +128,7 @@ class UserUseCaseTest {
 
     @Test
     void testControlUserUseCaseRejectsIllegalTransition() {
-        ControlUserUseCase useCase = new ControlUserUseCase(userRepository);
+        ControlUserUseCase useCase = new ControlUserUseCase(userRepository, noopRevoker());
         user.activate();
         user.deactivate();
         when(userRepository.findById(userId)).thenReturn(Mono.just(user));
@@ -136,5 +136,11 @@ class UserUseCaseTest {
         StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.ACTIVATE))
                 .expectError(InvalidUserStatusException.class)
                 .verify();
+    }
+
+    private static SessionRevoker noopRevoker() {
+        SessionRevoker revoker = org.mockito.Mockito.mock(SessionRevoker.class);
+        org.mockito.Mockito.lenient().when(revoker.revokeAllOf(org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
+        return revoker;
     }
 }

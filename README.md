@@ -107,19 +107,31 @@ docker build -t thinklab-party-authentication-service:latest .
 | `MICRONAUT_SERVER_PORT` | `8082` | HTTP port |
 | `MONGODB_URI` | `mongodb://localhost:27017/thinklab_party_authentication_db` | MongoDB connection |
 | `HASH_SERVICE_URL` | `http://localhost:8080` | Hash Token Registry base URL |
+| `THINKLAB_SECURITY_ENABLED` | `false` | Requires a bearer token outside the public paths |
+| `THINKLAB_JWT_PRIVATE_KEY` | *(generated)* | Issuer's EC P-256 signing key, a JWK; unset generates an ephemeral one (dev only) |
+| `THINKLAB_BOOTSTRAP_SECRET`, `THINKLAB_CLIENT_SECRET` | *(unset)* | Secrets of the registered `thinklab.security.service-clients` for `token/service` |
+
+## Authentication and sessions (ADR-020, ADR-021)
+
+This service is the platform's sole token **issuer** (every other service only verifies, via
+`thinklab-service-kit`'s `JwtVerifier`). Security is off by default; set `THINKLAB_SECURITY_ENABLED=true`.
+
+| Route | Purpose |
+|---|---|
+| `POST /party-authentication/v1/session/initiate` | Public login: `{organisationId, email, password}` → `{accessToken, tokenType, expiresIn, refreshToken, refreshExpiresIn}` |
+| `PUT /party-authentication/v1/{id}/credential/update` | Sets or replaces the password (Argon2id, 12-128 characters); admin or the user themselves |
+| `POST /party-authentication/v1/session/refresh` | Exchanges a refresh token for a new access + refresh token pair (single-use; reuse revokes the session) |
+| `POST /party-authentication/v1/session/revoke` | Logout: revokes the session of the given refresh token (silent on an unknown one) |
+| `PUT /party-authentication/v1/{id}/session/control/revoke` | Forced logout: revokes every session of a user; admin, service or the user themselves |
+| `GET /party-authentication/v1/session/revoked` | The revoked-session list other services poll — internal only, denied at the platform gateway |
+| `POST /party-authentication/v1/token/service` | Client-credentials token for service-to-service calls — internal only, denied at the platform gateway |
+| `GET /party-authentication/v1/.well-known/jwks.json` | This service's public signing key(s), for every verifier |
 
 ## Architecture Decision Records
 
 `docs/adr/`: 001 hexagonal reactive stack · 005 UUID identity sovereignty · 013 BIAN service domain
-conventions · 016 party authentication domain model.
-## Authentication (ADR-020)
-
-| Route | Purpose |
-|---|---|
-| `POST /party-authentication/v1/session/initiate` | Public login: `{organisationId, email, password}` returns `{accessToken, tokenType, expiresIn}` |
-| `PUT /party-authentication/v1/{id}/credential/update` | Sets or replaces the password (Argon2id, 12-128 characters); admin or the user themselves |
-
-Security is enabled per environment with `THINKLAB_SECURITY_ENABLED=true` and a shared `THINKLAB_JWT_SECRET` (>= 32 bytes).
+conventions · 016 party authentication domain model · 020 credentials, sessions and platform security ·
+021 asymmetric tokens, refresh rotation and session revocation.
 
 ## License
 

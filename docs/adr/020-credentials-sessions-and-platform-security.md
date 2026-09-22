@@ -1,7 +1,10 @@
 # ADR-020: Credentials, sessions and platform security
 
 ## Status
-Accepted
+Accepted — the token scheme (point 3), the service-to-service token (point 5) and the "no revocation/refresh"
+consequence are superseded by [ADR-021](021-asymmetric-tokens-refresh-and-revocation.md). Credential hashing,
+the `credential`/`session` Behavior Qualifiers, `SecurityFilter` enforcement and the failure-hygiene rules
+(points 1, 2, 4, 6) stand as written.
 
 ## Context
 Until now every service trusted the `X-Tenant-Id` and `X-Executor` headers, so any caller could act as any

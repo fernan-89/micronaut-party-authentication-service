@@ -106,7 +106,7 @@ class CredentialAdaptersTest {
         InitiateSessionUseCase login = mock(InitiateSessionUseCase.class);
         CredentialController controller = new CredentialController(login, mock(CaptureCredentialUseCase.class));
         InitiateSessionRequest request = new InitiateSessionRequest(ID, "ada@x.com", "pw");
-        when(login.execute(request)).thenReturn(Mono.just(new SessionResponse("tok", "Bearer", 60)))
+        when(login.execute(request)).thenReturn(Mono.just(new SessionResponse("tok", "Bearer", 60, "refresh", 3600)))
                 .thenReturn(Mono.error(new InvalidCredentialsException()));
 
         StepVerifier.create(controller.initiateSession(request))

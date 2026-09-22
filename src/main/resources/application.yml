@@ -156,15 +156,18 @@ warmup:
     hash-service: ${HASH_SERVICE_URL:`http://localhost:8080`}/health/liveness
 
 # ----------------------------------------------------------------------------------------------
-# Platform security (thinklab-service-kit SecurityFilter). Off by default; set THINKLAB_SECURITY_ENABLED=true
-# and THINKLAB_JWT_SECRET (>= 32 bytes, shared by every service) to require bearer tokens.
-# The login endpoint stays public.
+# Platform security (ADR-020, ADR-021). This service is the token ISSUER: it signs ES256 tokens with its
+# private key (a JWK in THINKLAB_JWT_PRIVATE_KEY; an ephemeral key is generated when unset - development
+# only), publishes the public key at /.well-known/jwks.json and lists revoked sessions at /session/revoked.
+# Off by default; set THINKLAB_SECURITY_ENABLED=true to require bearer tokens.
 # ----------------------------------------------------------------------------------------------
 thinklab:
   security:
     enabled: ${THINKLAB_SECURITY_ENABLED:false}
-    secret: ${THINKLAB_JWT_SECRET:}
     service-name: thinklab-party-authentication-service
+    ttl-seconds: 600
+    private-key: ${THINKLAB_JWT_PRIVATE_KEY:}
+    revocation-url: ${THINKLAB_REVOCATION_URL:http://localhost:8082/party-authentication/v1/session/revoked}
     public-paths:
       - /health
       - /prometheus
@@ -172,4 +175,15 @@ thinklab:
       - /swagger
       - /swagger-ui
       - /openapi
-      - /party-authentication/v1/session
+      - /party-authentication/v1/session/initiate
+      - /party-authentication/v1/session/refresh
+      - /party-authentication/v1/session/revoke
+      - /party-authentication/v1/session/revoked
+      - /party-authentication/v1/token
+      - /party-authentication/v1/.well-known
+    # Registered service clients (client id -> secret). A blank secret disables the client.
+    service-clients:
+      bootstrap: ${THINKLAB_BOOTSTRAP_SECRET:}
+      thinklab-party-reference-data-directory-service: ${THINKLAB_CLIENT_SECRET:}
+      thinklab-it-asset-registry-service: ${THINKLAB_CLIENT_SECRET:}
+      thinklab-it-operation-window-service: ${THINKLAB_CLIENT_SECRET:}

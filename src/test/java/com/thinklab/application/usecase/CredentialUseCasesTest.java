@@ -2,6 +2,7 @@ package com.thinklab.application.usecase;
 
 import com.thinklab.application.dto.request.CaptureCredentialRequest;
 import com.thinklab.application.dto.request.InitiateSessionRequest;
+import com.thinklab.application.dto.response.SessionResponse;
 import com.thinklab.domain.exception.InvalidCredentialsException;
 import com.thinklab.domain.exception.InvalidUserStatusException;
 import com.thinklab.domain.exception.OperationForbiddenException;
@@ -12,9 +13,6 @@ import com.thinklab.domain.model.User.UserStatus;
 import com.thinklab.domain.port.PasswordHasher;
 import com.thinklab.domain.repository.CredentialRepository;
 import com.thinklab.domain.repository.UserRepository;
-import com.thinklab.kit.security.JwtService;
-import com.thinklab.kit.security.Role;
-import com.thinklab.kit.security.SecurityProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,20 +34,16 @@ import static org.mockito.Mockito.when;
 
 class CredentialUseCasesTest {
 
-    private static final String SECRET = "0123456789abcdef0123456789abcdef";
     private final UserRepository users = mock(UserRepository.class);
     private final CredentialRepository credentials = mock(CredentialRepository.class);
     private final PasswordHasher hasher = mock(PasswordHasher.class);
     private final UUID tenant = UUID.randomUUID();
     private final UUID userId = UUID.randomUUID();
-    private SecurityProperties properties;
-    private JwtService jwt;
+    private final SessionIssuer issuer = mock(SessionIssuer.class);
 
     @BeforeEach
     void setUp() {
-        properties = new SecurityProperties();
-        properties.setSecret(SECRET);
-        jwt = new JwtService(properties);
+        when(issuer.issue(any(), anyString())).thenReturn(Mono.just(new SessionResponse("access", "Bearer", 600, "refresh", 3600)));
         when(hasher.hash(anyString())).thenReturn("hash-of-password");
         when(credentials.save(any(), anyString())).thenReturn(Mono.empty());
     }
@@ -112,7 +106,7 @@ class CredentialUseCasesTest {
     // ---------------------------------------------------------------------------- session/initiate
 
     private InitiateSessionUseCase session() {
-        return new InitiateSessionUseCase(users, credentials, hasher, jwt, properties);
+        return new InitiateSessionUseCase(users, credentials, hasher, issuer);
     }
 
     private InitiateSessionRequest login(String password) {
@@ -120,7 +114,7 @@ class CredentialUseCasesTest {
     }
 
     @Test
-    @DisplayName("valid credentials of an ACTIVE user yield a token carrying the user, tenant and role")
+    @DisplayName("valid credentials of an ACTIVE user open a session through the issuer")
     void loginSucceeds() {
         when(users.findByOrganisationIdAndEmail(tenant, "ada@x.com")).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
         when(credentials.findHash(userId)).thenReturn(Mono.just("stored-hash"));
@@ -128,26 +122,12 @@ class CredentialUseCasesTest {
 
         StepVerifier.create(session().execute(login("secret-password")))
                 .assertNext(response -> {
-                    assertEquals("Bearer", response.tokenType());
-                    assertEquals(3600, response.expiresIn());
-                    var principal = jwt.verify(response.accessToken());
-                    assertEquals(userId.toString(), principal.subject());
-                    assertEquals(tenant.toString(), principal.tenantId());
-                    assertEquals(Role.OPERATOR, principal.role());
+                    assertEquals("access", response.accessToken());
+                    assertEquals("refresh", response.refreshToken());
                 })
                 .verifyComplete();
-    }
 
-    @Test
-    @DisplayName("a user without a role logs in as a viewer")
-    void defaultRole() {
-        when(users.findByOrganisationIdAndEmail(tenant, "ada@x.com")).thenReturn(Mono.just(user(UserStatus.ACTIVE, null)));
-        when(credentials.findHash(userId)).thenReturn(Mono.just("stored-hash"));
-        when(hasher.matches("secret-password", "stored-hash")).thenReturn(true);
-
-        StepVerifier.create(session().execute(login("secret-password")))
-                .assertNext(response -> assertEquals(Role.VIEWER, jwt.verify(response.accessToken()).role()))
-                .verifyComplete();
+        verify(issuer).issue(any(), anyString());
     }
 
     @Test

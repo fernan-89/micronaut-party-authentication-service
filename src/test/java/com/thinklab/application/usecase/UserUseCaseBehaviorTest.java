@@ -153,7 +153,7 @@ class UserUseCaseBehaviorTest {
         when(userRepository.findById(userId)).thenReturn(Mono.just(user));
         when(userRepository.updateStatus(userId, UserStatus.SUSPENDED)).thenReturn(Mono.empty());
         when(userRepository.updateStatus(userId, UserStatus.DEACTIVATED)).thenReturn(Mono.empty());
-        ControlUserUseCase useCase = new ControlUserUseCase(userRepository);
+        ControlUserUseCase useCase = new ControlUserUseCase(userRepository, noopRevoker());
 
         StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.SUSPEND)).verifyComplete();
         StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.DEACTIVATE)).verifyComplete();
@@ -167,7 +167,7 @@ class UserUseCaseBehaviorTest {
     void controlNotFound() {
         when(userRepository.findById(userId)).thenReturn(Mono.empty());
 
-        StepVerifier.create(new ControlUserUseCase(userRepository).execute(userId, ControlUserUseCase.Action.ACTIVATE))
+        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, ControlUserUseCase.Action.ACTIVATE))
                 .expectError(UserNotFoundException.class)
                 .verify();
     }
@@ -177,7 +177,7 @@ class UserUseCaseBehaviorTest {
     void controlIllegalMoveNeverWrites() {
         when(userRepository.findById(userId)).thenReturn(Mono.just(user));
 
-        StepVerifier.create(new ControlUserUseCase(userRepository).execute(userId, ControlUserUseCase.Action.SUSPEND))
+        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, ControlUserUseCase.Action.SUSPEND))
                 .expectError(InvalidUserStatusException.class)
                 .verify();
 
@@ -190,5 +190,11 @@ class UserUseCaseBehaviorTest {
         assertEquals(UserStatus.ACTIVE, ControlUserUseCase.Action.ACTIVATE.targetStatus());
         assertEquals(UserStatus.SUSPENDED, ControlUserUseCase.Action.SUSPEND.targetStatus());
         assertEquals(UserStatus.DEACTIVATED, ControlUserUseCase.Action.DEACTIVATE.targetStatus());
+    }
+
+    private static SessionRevoker noopRevoker() {
+        SessionRevoker revoker = org.mockito.Mockito.mock(SessionRevoker.class);
+        org.mockito.Mockito.lenient().when(revoker.revokeAllOf(org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
+        return revoker;
     }
 }
