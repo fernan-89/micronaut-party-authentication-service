@@ -167,7 +167,7 @@ thinklab:
     service-name: thinklab-party-authentication-service
     ttl-seconds: 600
     private-key: ${THINKLAB_JWT_PRIVATE_KEY:}
-    revocation-url: ${THINKLAB_REVOCATION_URL:http://localhost:8082/party-authentication/v1/session/revoked}
+    revocation-url: ${THINKLAB_REVOCATION_URL:`http://localhost:8082/party-authentication/v1/session/revoked`}
     public-paths:
       - /health
       - /prometheus

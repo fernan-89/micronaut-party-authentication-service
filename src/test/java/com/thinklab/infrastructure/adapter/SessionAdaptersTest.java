@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 class SessionAdaptersTest {
 
     private static final UUID ID = UUID.randomUUID();
+    private static final UUID ENTITY_ID = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-09-22T10:00:00Z");
 
     private final RefreshTokenMongoRepository tokens = mock(RefreshTokenMongoRepository.class);
@@ -57,7 +58,7 @@ class SessionAdaptersTest {
     private final SessionRepositoryAdapter adapter = new SessionRepositoryAdapter(tokens, revoked);
 
     private RefreshTokenEntity entity(boolean used) {
-        return new RefreshTokenEntity("hash", ID, ID, "sess", NOW.plusSeconds(60), used, 1L);
+        return new RefreshTokenEntity(ENTITY_ID, "hash", ID, ID, "sess", NOW.plusSeconds(60), used, 1L);
     }
 
     // ------------------------------------------------------------------------------ entities
@@ -65,28 +66,30 @@ class SessionAdaptersTest {
     @Test
     @DisplayName("the entities reject null fields and map to and from the domain")
     void entities() {
-        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(null, ID, ID, "s", NOW, false, null));
-        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity("h", null, ID, "s", NOW, false, null));
-        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity("h", ID, null, "s", NOW, false, null));
-        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity("h", ID, ID, null, NOW, false, null));
-        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity("h", ID, ID, "s", null, false, null));
-        assertThrows(NullPointerException.class, () -> new RevokedSessionEntity(null, NOW));
-        assertThrows(NullPointerException.class, () -> new RevokedSessionEntity("s", null));
+        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(null, "h", ID, ID, "s", NOW, false, null));
+        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(ENTITY_ID, null, ID, ID, "s", NOW, false, null));
+        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(ENTITY_ID, "h", null, ID, "s", NOW, false, null));
+        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(ENTITY_ID, "h", ID, null, "s", NOW, false, null));
+        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(ENTITY_ID, "h", ID, ID, null, NOW, false, null));
+        assertThrows(NullPointerException.class, () -> new RefreshTokenEntity(ENTITY_ID, "h", ID, ID, "s", null, false, null));
+        assertThrows(NullPointerException.class, () -> new RevokedSessionEntity(null, "s", NOW));
+        assertThrows(NullPointerException.class, () -> new RevokedSessionEntity(ENTITY_ID, null, NOW));
+        assertThrows(NullPointerException.class, () -> new RevokedSessionEntity(ENTITY_ID, "s", null));
 
         RefreshTokenRecord record = new RefreshTokenRecord("h", ID, ID, "s", NOW, false);
         assertEquals(record, RefreshTokenEntity.fromDomain(record).toDomain());
         assertTrue(RefreshTokenEntity.fromDomain(record).asUsed().used());
-        assertEquals("s", new RevokedSessionEntity("s", NOW).toDomain().sessionId());
+        assertEquals("s", RevokedSessionEntity.of("s", NOW).toDomain().sessionId());
     }
 
     // ------------------------------------------------------------------------------ adapter
 
     @Test
-    @DisplayName("the adapter saves and finds refresh tokens")
+    @DisplayName("the adapter saves and finds refresh tokens by their hash, not by the Mongo id")
     void saveAndFind() {
         RefreshTokenRecord record = new RefreshTokenRecord("hash", ID, ID, "sess", NOW, false);
         when(tokens.save(any(RefreshTokenEntity.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        when(tokens.findById("hash")).thenReturn(Mono.just(entity(false)));
+        when(tokens.findByTokenHash("hash")).thenReturn(Mono.just(entity(false)));
 
         StepVerifier.create(adapter.saveRefreshToken(record)).verifyComplete();
         StepVerifier.create(adapter.findRefreshToken("hash")).assertNext(found -> assertEquals("sess", found.sessionId())).verifyComplete();
@@ -95,10 +98,10 @@ class SessionAdaptersTest {
     @Test
     @DisplayName("marking a token used succeeds once, then reports reuse; unknown tokens and lost races are reported as false")
     void markUsed() {
-        when(tokens.findById("fresh")).thenReturn(Mono.just(entity(false)));
-        when(tokens.findById("used")).thenReturn(Mono.just(entity(true)));
-        when(tokens.findById("gone")).thenReturn(Mono.empty());
-        when(tokens.findById("race")).thenReturn(Mono.just(entity(false)));
+        when(tokens.findByTokenHash("fresh")).thenReturn(Mono.just(entity(false)));
+        when(tokens.findByTokenHash("used")).thenReturn(Mono.just(entity(true)));
+        when(tokens.findByTokenHash("gone")).thenReturn(Mono.empty());
+        when(tokens.findByTokenHash("race")).thenReturn(Mono.just(entity(false)));
         when(tokens.update(any(RefreshTokenEntity.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)))
                 .thenReturn(Mono.error(new IllegalStateException("optimistic lock")));
 
@@ -110,12 +113,12 @@ class SessionAdaptersTest {
     }
 
     @Test
-    @DisplayName("revoking is idempotent and revocation state is readable")
+    @DisplayName("revoking is idempotent and revocation state is readable, keyed by sessionId not the Mongo id")
     void revocation() {
-        when(revoked.existsById("new")).thenReturn(Mono.just(false));
-        when(revoked.existsById("old")).thenReturn(Mono.just(true));
+        when(revoked.existsBySessionId("new")).thenReturn(Mono.just(false));
+        when(revoked.existsBySessionId("old")).thenReturn(Mono.just(true));
         when(revoked.save(any(RevokedSessionEntity.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        when(revoked.findByRevokedAtGreaterThanEquals(NOW)).thenReturn(Flux.just(new RevokedSessionEntity("new", NOW)));
+        when(revoked.findByRevokedAtGreaterThanEquals(NOW)).thenReturn(Flux.just(RevokedSessionEntity.of("new", NOW)));
 
         StepVerifier.create(adapter.revokeSession("new", NOW)).verifyComplete();
         StepVerifier.create(adapter.revokeSession("old", NOW)).verifyComplete();

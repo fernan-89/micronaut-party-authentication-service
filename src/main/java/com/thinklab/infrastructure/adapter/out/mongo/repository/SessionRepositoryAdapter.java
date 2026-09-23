@@ -34,13 +34,13 @@ public class SessionRepositoryAdapter implements SessionRepository {
     @Override
     public Mono<RefreshTokenRecord> findRefreshToken(String tokenHash) {
         Objects.requireNonNull(tokenHash, "Infrastructure constraint violated: Token hash is mandatory.");
-        return refreshTokens.findById(tokenHash).map(RefreshTokenEntity::toDomain);
+        return refreshTokens.findByTokenHash(tokenHash).map(RefreshTokenEntity::toDomain);
     }
 
     @Override
     public Mono<Boolean> markRefreshTokenUsed(String tokenHash) {
         Objects.requireNonNull(tokenHash, "Infrastructure constraint violated: Token hash is mandatory.");
-        return refreshTokens.findById(tokenHash)
+        return refreshTokens.findByTokenHash(tokenHash)
                 .flatMap(entity -> entity.used()
                         ? Mono.just(false)
                         : refreshTokens.update(entity.asUsed()).thenReturn(true))
@@ -53,15 +53,15 @@ public class SessionRepositoryAdapter implements SessionRepository {
     public Mono<Void> revokeSession(String sessionId, Instant revokedAt) {
         Objects.requireNonNull(sessionId, "Infrastructure constraint violated: Session ID is mandatory.");
         Objects.requireNonNull(revokedAt, "Infrastructure constraint violated: Revocation time is mandatory.");
-        return revokedSessions.existsById(sessionId)
-                .flatMap(exists -> exists ? Mono.<RevokedSessionEntity>empty() : revokedSessions.save(new RevokedSessionEntity(sessionId, revokedAt)))
+        return revokedSessions.existsBySessionId(sessionId)
+                .flatMap(exists -> exists ? Mono.<RevokedSessionEntity>empty() : revokedSessions.save(RevokedSessionEntity.of(sessionId, revokedAt)))
                 .then();
     }
 
     @Override
     public Mono<Boolean> isSessionRevoked(String sessionId) {
         Objects.requireNonNull(sessionId, "Infrastructure constraint violated: Session ID is mandatory.");
-        return revokedSessions.existsById(sessionId);
+        return revokedSessions.existsBySessionId(sessionId);
     }
 
     @Override
