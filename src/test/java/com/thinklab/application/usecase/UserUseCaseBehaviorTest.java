@@ -9,6 +9,8 @@ import com.thinklab.domain.model.User.UserRole;
 import com.thinklab.domain.model.User.UserStatus;
 import com.thinklab.domain.port.HashServicePort;
 import com.thinklab.domain.repository.UserRepository;
+import com.thinklab.kit.events.OutboxStore;
+import io.micronaut.serde.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,8 @@ class UserUseCaseBehaviorTest {
 
     @Mock private UserRepository userRepository;
     @Mock private HashServicePort hashServicePort;
+    @Mock private OutboxStore outboxStore;
+    @Mock private ObjectMapper objectMapper;
 
     private UUID userId;
     private UUID organisationId;
@@ -50,13 +54,15 @@ class UserUseCaseBehaviorTest {
 
     @Test
     @DisplayName("Initiate: persists a PENDING aggregate built from the request, sovereign ID and tenant")
-    void initiatePersistsPendingAggregate() {
+    void initiatePersistsPendingAggregate() throws Exception {
         UUID sovereign = UUID.randomUUID();
         when(userRepository.existsByOrganisationIdAndEmail(organisationId, "grace@thinklab.com")).thenReturn(Mono.just(false));
         when(hashServicePort.generateSovereignId("user-creation")).thenReturn(Mono.just(sovereign));
         when(userRepository.create(any(User.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(outboxStore.append(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository)
+        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper)
                         .execute(organisationId, new InitiateUserRequest("Grace Hopper", "grace@thinklab.com", UserRole.ADMIN)))
                 .assertNext(res -> {
                     assertEquals(sovereign, res.id());
@@ -76,7 +82,7 @@ class UserUseCaseBehaviorTest {
     void initiateDuplicateShortCircuits() {
         when(userRepository.existsByOrganisationIdAndEmail(organisationId, "ada@thinklab.com")).thenReturn(Mono.just(true));
 
-        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository)
+        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper)
                         .execute(organisationId, new InitiateUserRequest("Ada", "ada@thinklab.com", UserRole.VIEWER)))
                 .expectErrorSatisfies(error -> assertEquals("ERR-USR-00409", ((com.thinklab.domain.exception.BusinessException) error).getErrorCode()))
                 .verify();
@@ -91,7 +97,7 @@ class UserUseCaseBehaviorTest {
         when(userRepository.existsByOrganisationIdAndEmail(any(), anyString())).thenReturn(Mono.just(false));
         when(hashServicePort.generateSovereignId(anyString())).thenReturn(Mono.error(new IllegalStateException("hash down")));
 
-        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository)
+        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper)
                         .execute(organisationId, new InitiateUserRequest("Ada", "ada@thinklab.com", UserRole.VIEWER)))
                 .expectErrorMessage("hash down")
                 .verify();
