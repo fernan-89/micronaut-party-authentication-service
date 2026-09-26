@@ -1580,7 +1580,8 @@
                   "    pm.expect(json.accessToken.split('.')).to.have.lengthOf(3);",
                   "    pm.expect(json.expiresIn).to.be.above(0);",
                   "});",
-                  "pm.environment.set('sessionToken', json.accessToken);"
+                  "pm.environment.set('sessionToken', json.accessToken);",
+                  "pm.environment.set('refreshToken', json.refreshToken);"
                 ],
                 "type": "text/javascript"
               }
@@ -1615,6 +1616,367 @@
         }
       ],
       "name": "03. Credentials & Sessions (ADR-020)"
+    },
+    {
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('At least one EC key, no private material', () => {",
+                  "    pm.expect(json.keys).to.be.an('array').that.is.not.empty;",
+                  "    json.keys.forEach(k => { pm.expect(k.kty).to.eql('EC'); pm.expect(k.d).to.be.undefined; });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "01. JWKS: The Public Key Set Is Reachable Without Auth",
+          "request": {
+            "header": [],
+            "method": "GET",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                ".well-known",
+                "jwks.json"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/.well-known/jwks.json"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00401', () => {",
+                  "    pm.expect(json.status).to.eql(401);",
+                  "    pm.expect(json.error_code).to.eql('ERR-USR-00401');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "02. Token Service: Blank Client Secrets Are Always Rejected (401, generic)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "client_id=thinklab-party-reference-data-directory-service&client_secret=whatever"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "token",
+                "service"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/token/service"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('A fresh access token and a fresh, different refresh token', () => {",
+                  "    pm.expect(json.accessToken.split('.')).to.have.lengthOf(3);",
+                  "    pm.expect(json.refreshToken).to.not.eql(pm.environment.get('refreshToken'));",
+                  "});",
+                  "pm.environment.set('oldRefreshToken', pm.environment.get('refreshToken'));",
+                  "pm.environment.set('refreshToken', json.refreshToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "03. Refresh: A Real Refresh Token Rotates Into A New Pair",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "refresh"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/refresh"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "const json = pm.response.json();",
+                  "pm.test('RFC 7807 error_code is ERR-USR-00401', () => {",
+                  "    pm.expect(json.status).to.eql(401);",
+                  "    pm.expect(json.error_code).to.eql('ERR-USR-00401');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "04. Refresh: Reusing The Rotated-Away Token Is Treated As Theft (401)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{oldRefreshToken}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "refresh"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/refresh"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('At least one revoked entry with sid and until', () => {",
+                  "    pm.expect(json.revoked).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(json.revoked[0].sid).to.not.be.undefined;",
+                  "    pm.expect(json.revoked[0].until).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "05. Revoked Sessions: The Reuse Above Published This Session (200, non-empty)",
+          "request": {
+            "header": [],
+            "method": "GET",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "revoked"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/revoked"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "06. Revoke User Sessions: Missing Headers Are A 400, Not A 500",
+          "request": {
+            "header": [],
+            "method": "PUT",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "{{illegalTransitionUserId}}",
+                "session",
+                "control",
+                "revoke"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/{{illegalTransitionUserId}}/session/control/revoke"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.environment.set('logoutRefreshToken', json.refreshToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "07. Logout: A Fresh Login, Then A Real Refresh Token Logs Out (204)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": \"{{organisationId}}\",\n  \"email\": \"{{illegalTransitionEmail}}\",\n  \"password\": \"A-very-long-passphrase-1\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "initiate"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/initiate"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "08. Logout: Revoke With That Refresh Token (204)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{logoutRefreshToken}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "revoke"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/revoke"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "name": "09. Logout: An Unknown Refresh Token Is Silently Accepted Too (204)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"not-a-real-refresh-token\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "party-authentication",
+                "v1",
+                "session",
+                "revoke"
+              ],
+              "raw": "{{base_url}}/party-authentication/v1/session/revoke"
+            }
+          }
+        }
+      ],
+      "name": "04. Sessions Beyond Login: Refresh, Revoke, JWKS, Service Tokens (ADR-021)"
     }
   ],
   "variable": [
