@@ -112,6 +112,27 @@ class SessionAdaptersTest {
         verify(tokens, org.mockito.Mockito.times(2)).update(any(RefreshTokenEntity.class));
     }
 
+    private static com.mongodb.MongoWriteException writeError(int code) {
+        return new com.mongodb.MongoWriteException(new com.mongodb.WriteError(code, "E" + code, new org.bson.BsonDocument()),
+                new com.mongodb.ServerAddress());
+    }
+
+    @Test
+    @DisplayName("a concurrent revocation losing the unique-index race still succeeds; other write errors propagate")
+    void revocationRace() {
+        when(revoked.existsBySessionId(org.mockito.ArgumentMatchers.anyString())).thenReturn(Mono.just(false));
+        when(revoked.save(any(RevokedSessionEntity.class)))
+                .thenReturn(Mono.error(writeError(11000)))
+                .thenReturn(Mono.error(new IllegalStateException("wrapped", writeError(11000))))
+                .thenReturn(Mono.error(writeError(2)))
+                .thenReturn(Mono.error(new IllegalStateException("not a write error")));
+
+        StepVerifier.create(adapter.revokeSession("raced", NOW)).verifyComplete();
+        StepVerifier.create(adapter.revokeSession("raced-wrapped", NOW)).verifyComplete();
+        StepVerifier.create(adapter.revokeSession("bad", NOW)).expectError(com.mongodb.MongoWriteException.class).verify();
+        StepVerifier.create(adapter.revokeSession("worse", NOW)).expectError(IllegalStateException.class).verify();
+    }
+
     @Test
     @DisplayName("revoking is idempotent and revocation state is readable, keyed by sessionId not the Mongo id")
     void revocation() {

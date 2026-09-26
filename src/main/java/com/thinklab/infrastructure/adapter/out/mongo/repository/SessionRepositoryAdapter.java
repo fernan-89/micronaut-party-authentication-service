@@ -1,5 +1,7 @@
 package com.thinklab.infrastructure.adapter.out.mongo.repository;
 
+import com.mongodb.ErrorCategory;
+import com.mongodb.MongoWriteException;
 import com.thinklab.domain.model.RefreshTokenRecord;
 import com.thinklab.domain.model.RevokedSession;
 import com.thinklab.domain.repository.SessionRepository;
@@ -55,7 +57,20 @@ public class SessionRepositoryAdapter implements SessionRepository {
         Objects.requireNonNull(revokedAt, "Infrastructure constraint violated: Revocation time is mandatory.");
         return revokedSessions.existsBySessionId(sessionId)
                 .flatMap(exists -> exists ? Mono.<RevokedSessionEntity>empty() : revokedSessions.save(RevokedSessionEntity.of(sessionId, revokedAt)))
+                // Two concurrent revocations can both pass the existence check; the unique index on sessionId
+                // (created since thinklab-service-kit 0.5.0) then rejects the second insert. The session is
+                // revoked either way, so that is success, not an error.
+                .onErrorResume(SessionRepositoryAdapter::isDuplicateKey, e -> Mono.empty())
                 .then();
+    }
+
+    static boolean isDuplicateKey(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof MongoWriteException write && write.getError().getCategory() == ErrorCategory.DUPLICATE_KEY) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

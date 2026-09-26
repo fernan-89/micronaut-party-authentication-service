@@ -133,6 +133,18 @@ This service is the platform's sole token **issuer** (every other service only v
 conventions · 016 party authentication domain model · 020 credentials, sessions and platform security ·
 021 asymmetric tokens, refresh rotation and session revocation.
 
+### Automated Tests
+
+```bash
+./gradlew test               # unit suite + 100% line/branch coverage gate (no Docker needed)
+./gradlew integrationTest    # Testcontainers suite against a real MongoDB replica set and NATS JetStream (needs Docker)
+./gradlew check              # both, as CI runs it
+```
+
+The integration suite (`src/integrationTest`, platform
+[ADR-025](https://github.com/fernan-89/micronaut-hash-token-registry-service/blob/master/docs/adr/025-integration-tests-with-testcontainers.md))
+runs the service against a real MongoDB replica set and NATS JetStream: user creation writing the user and its `user.initiated` outbox event atomically (and rolling both back when the append fails), users, credentials, refresh-token rotation under concurrency (exactly one winner), idempotent revocation under concurrency, and the declared indexes, including the unique ones on `tokenHash` and `sessionId`. Integration tests use `@MicronautTest(packages = "com.thinklab")`: without it Micronaut Data MongoDB stops mapping `@Id` to `_id` for entities outside the test's own package.
+
 ## License
 
 Licensed under the [PolyForm Strict License 1.0.0](LICENSE): you may read and use this software for noncommercial purposes only. Modifying it, creating derivative works, redistributing it and any commercial use are not permitted without a separate written license. This software is not open source.
