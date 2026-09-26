@@ -9,8 +9,6 @@ import com.thinklab.domain.model.User.UserRole;
 import com.thinklab.domain.model.User.UserStatus;
 import com.thinklab.domain.port.HashServicePort;
 import com.thinklab.domain.repository.UserRepository;
-import com.thinklab.kit.events.OutboxStore;
-import io.micronaut.serde.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,8 +36,7 @@ class UserUseCaseBehaviorTest {
 
     @Mock private UserRepository userRepository;
     @Mock private HashServicePort hashServicePort;
-    @Mock private OutboxStore outboxStore;
-    @Mock private ObjectMapper objectMapper;
+    @Mock private UserCreationWriter userCreationWriter;
 
     private UUID userId;
     private UUID organisationId;
@@ -54,15 +51,13 @@ class UserUseCaseBehaviorTest {
 
     @Test
     @DisplayName("Initiate: persists a PENDING aggregate built from the request, sovereign ID and tenant")
-    void initiatePersistsPendingAggregate() throws Exception {
+    void initiatePersistsPendingAggregate() {
         UUID sovereign = UUID.randomUUID();
         when(userRepository.existsByOrganisationIdAndEmail(organisationId, "grace@thinklab.com")).thenReturn(Mono.just(false));
         when(hashServicePort.generateSovereignId("user-creation")).thenReturn(Mono.just(sovereign));
-        when(userRepository.create(any(User.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(outboxStore.append(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(userCreationWriter.createAndPublish(any(User.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper)
+        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, userCreationWriter)
                         .execute(organisationId, new InitiateUserRequest("Grace Hopper", "grace@thinklab.com", UserRole.ADMIN)))
                 .assertNext(res -> {
                     assertEquals(sovereign, res.id());
@@ -73,22 +68,22 @@ class UserUseCaseBehaviorTest {
                 .verifyComplete();
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).create(captor.capture());
+        verify(userCreationWriter).createAndPublish(captor.capture());
         assertEquals("grace@thinklab.com", captor.getValue().getEmail());
     }
 
     @Test
-    @DisplayName("Initiate: a duplicate email never reaches the hash service or the repository")
+    @DisplayName("Initiate: a duplicate email never reaches the hash service or the transactional writer")
     void initiateDuplicateShortCircuits() {
         when(userRepository.existsByOrganisationIdAndEmail(organisationId, "ada@thinklab.com")).thenReturn(Mono.just(true));
 
-        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper)
+        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, userCreationWriter)
                         .execute(organisationId, new InitiateUserRequest("Ada", "ada@thinklab.com", UserRole.VIEWER)))
                 .expectErrorSatisfies(error -> assertEquals("ERR-USR-00409", ((com.thinklab.domain.exception.BusinessException) error).getErrorCode()))
                 .verify();
 
         verifyNoInteractions(hashServicePort);
-        verify(userRepository, never()).create(any());
+        verifyNoInteractions(userCreationWriter);
     }
 
     @Test
@@ -97,12 +92,12 @@ class UserUseCaseBehaviorTest {
         when(userRepository.existsByOrganisationIdAndEmail(any(), anyString())).thenReturn(Mono.just(false));
         when(hashServicePort.generateSovereignId(anyString())).thenReturn(Mono.error(new IllegalStateException("hash down")));
 
-        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper)
+        StepVerifier.create(new InitiateUserUseCase(hashServicePort, userRepository, userCreationWriter)
                         .execute(organisationId, new InitiateUserRequest("Ada", "ada@thinklab.com", UserRole.VIEWER)))
                 .expectErrorMessage("hash down")
                 .verify();
 
-        verify(userRepository, never()).create(any());
+        verifyNoInteractions(userCreationWriter);
     }
 
     @Test

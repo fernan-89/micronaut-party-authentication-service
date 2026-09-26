@@ -10,9 +10,6 @@ import com.thinklab.domain.model.User.UserRole;
 import com.thinklab.domain.model.User.UserStatus;
 import com.thinklab.domain.port.HashServicePort;
 import com.thinklab.domain.repository.UserRepository;
-import com.thinklab.kit.events.OutboxEvent;
-import com.thinklab.kit.events.OutboxStore;
-import io.micronaut.serde.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,10 +36,7 @@ class UserUseCaseTest {
     private HashServicePort hashServicePort;
 
     @Mock
-    private OutboxStore outboxStore;
-
-    @Mock
-    private ObjectMapper objectMapper;
+    private UserCreationWriter userCreationWriter;
 
     private UUID userId;
     private UUID organisationId;
@@ -56,15 +50,13 @@ class UserUseCaseTest {
     }
 
     @Test
-    void testInitiateUserUseCase() throws Exception {
-        InitiateUserUseCase useCase = new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper);
+    void testInitiateUserUseCase() {
+        InitiateUserUseCase useCase = new InitiateUserUseCase(hashServicePort, userRepository, userCreationWriter);
         InitiateUserRequest request = new InitiateUserRequest("Ada Lovelace", "ada@thinklab.com", UserRole.OPERATOR);
 
         when(userRepository.existsByOrganisationIdAndEmail(organisationId, "ada@thinklab.com")).thenReturn(Mono.just(false));
         when(hashServicePort.generateSovereignId("user-creation")).thenReturn(Mono.just(userId));
-        when(userRepository.create(any(User.class))).thenReturn(Mono.just(user));
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(outboxStore.append(any())).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        when(userCreationWriter.createAndPublish(any(User.class))).thenReturn(Mono.just(user));
 
         StepVerifier.create(useCase.execute(organisationId, request))
                 .assertNext(res -> {
@@ -75,39 +67,8 @@ class UserUseCaseTest {
     }
 
     @Test
-    void testInitiateUserUseCasePublishesEventEvenWhenOutboxAppendFails() throws Exception {
-        InitiateUserUseCase useCase = new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper);
-        InitiateUserRequest request = new InitiateUserRequest("Ada Lovelace", "ada@thinklab.com", UserRole.OPERATOR);
-
-        when(userRepository.existsByOrganisationIdAndEmail(organisationId, "ada@thinklab.com")).thenReturn(Mono.just(false));
-        when(hashServicePort.generateSovereignId("user-creation")).thenReturn(Mono.just(userId));
-        when(userRepository.create(any(User.class))).thenReturn(Mono.just(user));
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(outboxStore.append(any(OutboxEvent.class))).thenReturn(Mono.error(new IllegalStateException("mongo down")));
-
-        StepVerifier.create(useCase.execute(organisationId, request))
-                .assertNext(res -> assertEquals(userId, res.id()))
-                .verifyComplete();
-    }
-
-    @Test
-    void testInitiateUserUseCaseStillCompletesWhenPayloadSerializationFails() throws Exception {
-        InitiateUserUseCase useCase = new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper);
-        InitiateUserRequest request = new InitiateUserRequest("Ada Lovelace", "ada@thinklab.com", UserRole.OPERATOR);
-
-        when(userRepository.existsByOrganisationIdAndEmail(organisationId, "ada@thinklab.com")).thenReturn(Mono.just(false));
-        when(hashServicePort.generateSovereignId("user-creation")).thenReturn(Mono.just(userId));
-        when(userRepository.create(any(User.class))).thenReturn(Mono.just(user));
-        when(objectMapper.writeValueAsString(any())).thenThrow(new java.io.IOException("bad payload"));
-
-        StepVerifier.create(useCase.execute(organisationId, request))
-                .assertNext(res -> assertEquals(userId, res.id()))
-                .verifyComplete();
-    }
-
-    @Test
     void testInitiateUserUseCaseRejectsDuplicateEmail() {
-        InitiateUserUseCase useCase = new InitiateUserUseCase(hashServicePort, userRepository, outboxStore, objectMapper);
+        InitiateUserUseCase useCase = new InitiateUserUseCase(hashServicePort, userRepository, userCreationWriter);
         InitiateUserRequest request = new InitiateUserRequest("Ada Lovelace", "ada@thinklab.com", UserRole.OPERATOR);
 
         when(userRepository.existsByOrganisationIdAndEmail(organisationId, "ada@thinklab.com")).thenReturn(Mono.just(true));
