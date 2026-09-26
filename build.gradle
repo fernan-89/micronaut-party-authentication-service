@@ -51,7 +51,7 @@ repositories {
 }
 
 dependencies {
-    implementation         'com.thinklab:thinklab-service-kit:0.4.0'
+    implementation         'com.thinklab:thinklab-service-kit:0.4.1'
     // Runtime for the kit's NatsEventPublisher/OutboxRelay (thinklab.events.enabled=true); the kit only
     // declares it compileOnly (ADR-003 of thinklab-service-kit).
     implementation         'io.nats:jnats:2.26.3'
