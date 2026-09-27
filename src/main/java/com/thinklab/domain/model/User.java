@@ -142,7 +142,7 @@ public class User {
     // --- Nested Value Objects ---
 
     public enum UserRole {
-        ADMIN, OPERATOR, VIEWER
+        ADMIN, OPERATOR, VIEWER, REQUESTER
     }
 
     /**

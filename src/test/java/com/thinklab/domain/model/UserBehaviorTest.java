@@ -153,10 +153,11 @@ class UserBehaviorTest {
     }
 
     @Test
-    @DisplayName("the three roles are ADMIN, OPERATOR and VIEWER")
+    @DisplayName("the four roles are ADMIN, OPERATOR, VIEWER and REQUESTER")
     void roles() {
-        assertEquals(3, UserRole.values().length);
+        assertEquals(4, UserRole.values().length);
         assertEquals(UserRole.VIEWER, UserRole.valueOf("VIEWER"));
+        assertEquals(UserRole.REQUESTER, UserRole.valueOf("REQUESTER"));
     }
 
     @TestFactory
