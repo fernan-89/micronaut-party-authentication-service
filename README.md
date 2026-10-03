@@ -123,6 +123,7 @@ This service is the platform's sole token **issuer** (every other service only v
 | `POST /party-authentication/v1/session/refresh` | Exchanges a refresh token for a new access + refresh token pair (single-use; reuse revokes the session) |
 | `POST /party-authentication/v1/session/revoke` | Logout: revokes the session of the given refresh token (silent on an unknown one) |
 | `PUT /party-authentication/v1/{id}/session/control/revoke` | Forced logout: revokes every session of a user; admin, service or the user themselves |
+| `POST /party-authentication/v1/session/federated` | Opens a session for a user the identity-federation service authenticated against an external provider (same tokens as a password login; SERVICE role only, ADR-022) - internal only, denied at the platform gateway |
 | `GET /party-authentication/v1/session/revoked` | The revoked-session list other services poll — internal only, denied at the platform gateway |
 | `POST /party-authentication/v1/token/service` | Client-credentials token for service-to-service calls — internal only, denied at the platform gateway |
 | `GET /party-authentication/v1/.well-known/jwks.json` | This service's public signing key(s), for every verifier |

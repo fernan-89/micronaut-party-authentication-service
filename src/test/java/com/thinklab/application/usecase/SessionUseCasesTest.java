@@ -1,5 +1,6 @@
 package com.thinklab.application.usecase;
 
+import com.thinklab.application.dto.request.FederatedSessionRequest;
 import com.thinklab.application.dto.response.SessionResponse;
 import com.thinklab.domain.exception.InvalidCredentialsException;
 import com.thinklab.domain.exception.OperationForbiddenException;
@@ -210,6 +211,41 @@ class SessionUseCasesTest {
 
         StepVerifier.create(new RefreshSessionUseCase(sessions, users, issuer, revoker).execute("x"))
                 .expectError(InvalidCredentialsException.class).verify();
+    }
+
+    // ------------------------------------------------------------------------------ InitiateFederatedSessionUseCase
+
+    @Test
+    @DisplayName("a service opens a session for an ACTIVE user of that organisation, with the same tokens a password login produces; with no role (security off) nothing is enforced")
+    void federatedSession() {
+        InitiateFederatedSessionUseCase useCase = new InitiateFederatedSessionUseCase(users, issuer);
+        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
+        FederatedSessionRequest request = new FederatedSessionRequest(tenant, userId);
+
+        StepVerifier.create(useCase.execute(request, "SERVICE")).assertNext(session -> {
+            assertEquals("Bearer", session.tokenType());
+            assertTrue(session.refreshToken().length() > 20);
+        }).verifyComplete();
+        StepVerifier.create(useCase.execute(request, null)).expectNextCount(1).verifyComplete();
+        verify(sessions, times(2)).saveRefreshToken(any());
+    }
+
+    @Test
+    @DisplayName("only a SERVICE may open a federated session; an unknown, inactive or foreign user is the same generic 401, and nothing is stored")
+    void federatedSessionRefusals() {
+        InitiateFederatedSessionUseCase useCase = new InitiateFederatedSessionUseCase(users, issuer);
+        FederatedSessionRequest request = new FederatedSessionRequest(tenant, userId);
+        StepVerifier.create(useCase.execute(request, "ADMIN")).expectError(OperationForbiddenException.class).verify();
+        StepVerifier.create(useCase.execute(request, "OPERATOR")).expectError(OperationForbiddenException.class).verify();
+
+        when(users.findById(userId)).thenReturn(Mono.empty());
+        StepVerifier.create(useCase.execute(request, "SERVICE")).expectError(InvalidCredentialsException.class).verify();
+        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.SUSPENDED, UserRole.ADMIN)));
+        StepVerifier.create(useCase.execute(request, "SERVICE")).expectError(InvalidCredentialsException.class).verify();
+        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
+        StepVerifier.create(useCase.execute(new FederatedSessionRequest(UUID.randomUUID(), userId), "SERVICE")).expectError(InvalidCredentialsException.class).verify();
+
+        verify(sessions, never()).saveRefreshToken(any());
     }
 
     // ------------------------------------------------------------------------------ RevokeSessionUseCase

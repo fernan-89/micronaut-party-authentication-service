@@ -1,8 +1,10 @@
 package com.thinklab.infrastructure.adapter.in.web;
 
+import com.thinklab.application.dto.request.FederatedSessionRequest;
 import com.thinklab.application.dto.request.RefreshTokenRequest;
 import com.thinklab.application.dto.response.RevokedSessionsResponse;
 import com.thinklab.application.dto.response.SessionResponse;
+import com.thinklab.application.usecase.InitiateFederatedSessionUseCase;
 import com.thinklab.application.usecase.IssueServiceTokenUseCase;
 import com.thinklab.application.usecase.ListRevokedSessionsUseCase;
 import com.thinklab.application.usecase.RefreshSessionUseCase;
@@ -43,11 +45,14 @@ public class SessionController {
     private final RevokeUserSessionsUseCase revokeUserSessionsUseCase;
     private final ListRevokedSessionsUseCase listRevokedSessionsUseCase;
     private final IssueServiceTokenUseCase issueServiceTokenUseCase;
+    private final InitiateFederatedSessionUseCase initiateFederatedSessionUseCase;
     private final LocalKeyStore localKeyStore;
 
     public SessionController(RefreshSessionUseCase refreshSessionUseCase, RevokeSessionUseCase revokeSessionUseCase,
                              RevokeUserSessionsUseCase revokeUserSessionsUseCase, ListRevokedSessionsUseCase listRevokedSessionsUseCase,
-                             IssueServiceTokenUseCase issueServiceTokenUseCase, LocalKeyStore localKeyStore) {
+                             IssueServiceTokenUseCase issueServiceTokenUseCase, LocalKeyStore localKeyStore,
+                             InitiateFederatedSessionUseCase initiateFederatedSessionUseCase) {
+        this.initiateFederatedSessionUseCase = initiateFederatedSessionUseCase;
         this.refreshSessionUseCase = refreshSessionUseCase;
         this.revokeSessionUseCase = revokeSessionUseCase;
         this.revokeUserSessionsUseCase = revokeUserSessionsUseCase;
@@ -60,6 +65,13 @@ public class SessionController {
     public Mono<HttpResponse<SessionResponse>> refresh(@Body @Valid RefreshTokenRequest request) {
         log.info("[ACTION: REFRESH_SESSION] Refresh requested");
         return refreshSessionUseCase.execute(request.refreshToken()).map(HttpResponse::ok);
+    }
+
+    /** Behavior Qualifier: {@code session/federated}. Internal: only the identity-federation service (a SERVICE token) may call it. */
+    @Post("/session/federated")
+    public Mono<HttpResponse<SessionResponse>> federated(@Body @Valid FederatedSessionRequest request, @Header("X-Role") @Nullable String role) {
+        log.info("[ACTION: FEDERATED_SESSION] Federated session requested for organisation {}", request.organisationId());
+        return initiateFederatedSessionUseCase.execute(request, role).map(HttpResponse::ok);
     }
 
     @Post("/session/revoke")

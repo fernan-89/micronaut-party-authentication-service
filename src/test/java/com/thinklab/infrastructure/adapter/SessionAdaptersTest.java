@@ -1,8 +1,10 @@
 package com.thinklab.infrastructure.adapter;
 
+import com.thinklab.application.dto.request.FederatedSessionRequest;
 import com.thinklab.application.dto.request.RefreshTokenRequest;
 import com.thinklab.application.dto.response.RevokedSessionsResponse;
 import com.thinklab.application.dto.response.SessionResponse;
+import com.thinklab.application.usecase.InitiateFederatedSessionUseCase;
 import com.thinklab.application.usecase.IssueServiceTokenUseCase;
 import com.thinklab.application.usecase.ListRevokedSessionsUseCase;
 import com.thinklab.application.usecase.RefreshSessionUseCase;
@@ -178,8 +180,9 @@ class SessionAdaptersTest {
     private final RevokeUserSessionsUseCase revokeAll = mock(RevokeUserSessionsUseCase.class);
     private final ListRevokedSessionsUseCase list = mock(ListRevokedSessionsUseCase.class);
     private final IssueServiceTokenUseCase serviceToken = mock(IssueServiceTokenUseCase.class);
+    private final InitiateFederatedSessionUseCase federated = mock(InitiateFederatedSessionUseCase.class);
     private final LocalKeyStore keyStore = new LocalKeyStore(new SecurityProperties());
-    private final SessionController controller = new SessionController(refresh, revoke, revokeAll, list, serviceToken, keyStore);
+    private final SessionController controller = new SessionController(refresh, revoke, revokeAll, list, serviceToken, keyStore, federated);
 
     @Test
     @DisplayName("refresh, revoke and the revocation list map to 200, 204 and 200")
@@ -193,6 +196,17 @@ class SessionAdaptersTest {
         StepVerifier.create(controller.refresh(new RefreshTokenRequest("tok"))).expectError(InvalidCredentialsException.class).verify();
         StepVerifier.create(controller.revoke(new RefreshTokenRequest("tok"))).assertNext(r -> assertEquals(HttpStatus.NO_CONTENT, r.getStatus())).verifyComplete();
         StepVerifier.create(controller.revoked()).assertNext(r -> assertTrue(r.body().revoked().isEmpty())).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("session/federated passes the verified role to the use case and maps to 200, propagating a refusal")
+    void federatedEndpoint() {
+        FederatedSessionRequest request = new FederatedSessionRequest(ID, ID);
+        when(federated.execute(request, "SERVICE")).thenReturn(Mono.just(new SessionResponse("a", "Bearer", 600, "r", 3600)));
+        when(federated.execute(request, "ADMIN")).thenReturn(Mono.error(new InvalidCredentialsException()));
+
+        StepVerifier.create(controller.federated(request, "SERVICE")).assertNext(r -> assertEquals("a", r.body().accessToken())).verifyComplete();
+        StepVerifier.create(controller.federated(request, "ADMIN")).expectError(InvalidCredentialsException.class).verify();
     }
 
     @Test

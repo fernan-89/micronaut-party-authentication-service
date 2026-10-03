@@ -187,6 +187,7 @@ thinklab:
       thinklab-party-reference-data-directory-service: ${THINKLAB_CLIENT_SECRET:}
       thinklab-it-asset-registry-service: ${THINKLAB_CLIENT_SECRET:}
       thinklab-it-operation-window-service: ${THINKLAB_CLIENT_SECRET:}
+      thinklab-identity-federation-service: ${THINKLAB_CLIENT_SECRET:}
   # ----------------------------------------------------------------------------------------------
   # Event backbone (thinklab-service-kit ADR-003): publishes thinklab.party-authentication.user.initiated
   # via the outbox on every new User. Off by default; set THINKLAB_EVENTS_ENABLED=true and run NATS
