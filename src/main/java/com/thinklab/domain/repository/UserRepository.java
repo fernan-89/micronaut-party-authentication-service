@@ -25,7 +25,7 @@ public interface UserRepository {
 
     Mono<User> create(User user);
 
-    Mono<User> findById(UUID id);
+    Mono<User> findById(UUID id, UUID organisationId);
 
     /**
      * Tenant-scoped listing of all Users belonging to a given Organisation.

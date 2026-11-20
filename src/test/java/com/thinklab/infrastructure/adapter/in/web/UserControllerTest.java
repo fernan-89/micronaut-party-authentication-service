@@ -38,6 +38,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UserControllerTest {
 
+    private static final String TENANT = UUID.randomUUID().toString();
+
     private static final String EXECUTOR = "iam-admin";
 
     @Mock private InitiateUserUseCase initiateUserUseCase;
@@ -95,9 +97,9 @@ class UserControllerTest {
     @Test
     @DisplayName("retrieveById returns 200 OK")
     void retrieveById() {
-        when(retrieveUserUseCase.execute(userId)).thenReturn(Mono.just(sample));
+        when(retrieveUserUseCase.execute(userId, UUID.fromString(TENANT))).thenReturn(Mono.just(sample));
 
-        StepVerifier.create(controller.retrieveById(userId))
+        StepVerifier.create(controller.retrieveById(userId, TENANT))
                 .assertNext(response -> {
                     assertEquals(HttpStatus.OK, response.getStatus());
                     assertEquals("Ada Lovelace", response.body().fullName());
@@ -108,9 +110,9 @@ class UserControllerTest {
     @Test
     @DisplayName("retrieveById surfaces not-found")
     void retrieveByIdNotFound() {
-        when(retrieveUserUseCase.execute(userId)).thenReturn(Mono.error(new UserNotFoundException(userId)));
+        when(retrieveUserUseCase.execute(userId, UUID.fromString(TENANT))).thenReturn(Mono.error(new UserNotFoundException(userId)));
 
-        StepVerifier.create(controller.retrieveById(userId)).expectError(UserNotFoundException.class).verify();
+        StepVerifier.create(controller.retrieveById(userId, TENANT)).expectError(UserNotFoundException.class).verify();
     }
 
     @Test
@@ -133,9 +135,9 @@ class UserControllerTest {
     @DisplayName("update returns 204 No Content")
     void update() {
         UpdateUserRequest request = new UpdateUserRequest("Ada L.", UserRole.ADMIN);
-        when(updateUserUseCase.execute(userId, request)).thenReturn(Mono.empty());
+        when(updateUserUseCase.execute(userId, UUID.fromString(TENANT), request)).thenReturn(Mono.empty());
 
-        StepVerifier.create(controller.update(userId, EXECUTOR, request))
+        StepVerifier.create(controller.update(userId, TENANT, EXECUTOR, request))
                 .assertNext(response -> assertEquals(HttpStatus.NO_CONTENT, response.getStatus()))
                 .verifyComplete();
     }
@@ -143,26 +145,26 @@ class UserControllerTest {
     @Test
     @DisplayName("each control endpoint dispatches its action and returns 204")
     void controlEndpoints() {
-        when(controlUserUseCase.execute(eq(userId), any(ControlUserUseCase.Action.class))).thenReturn(Mono.empty());
+        when(controlUserUseCase.execute(eq(userId), eq(UUID.fromString(TENANT)), any(ControlUserUseCase.Action.class))).thenReturn(Mono.empty());
 
-        StepVerifier.create(controller.controlActivate(userId, EXECUTOR))
+        StepVerifier.create(controller.controlActivate(userId, TENANT, EXECUTOR))
                 .assertNext(r -> assertEquals(HttpStatus.NO_CONTENT, r.getStatus())).verifyComplete();
-        StepVerifier.create(controller.controlSuspend(userId, EXECUTOR))
+        StepVerifier.create(controller.controlSuspend(userId, TENANT, EXECUTOR))
                 .assertNext(r -> assertEquals(HttpStatus.NO_CONTENT, r.getStatus())).verifyComplete();
-        StepVerifier.create(controller.controlDeactivate(userId, EXECUTOR))
+        StepVerifier.create(controller.controlDeactivate(userId, TENANT, EXECUTOR))
                 .assertNext(r -> assertEquals(HttpStatus.NO_CONTENT, r.getStatus())).verifyComplete();
 
-        verify(controlUserUseCase).execute(userId, ControlUserUseCase.Action.ACTIVATE);
-        verify(controlUserUseCase).execute(userId, ControlUserUseCase.Action.SUSPEND);
-        verify(controlUserUseCase).execute(userId, ControlUserUseCase.Action.DEACTIVATE);
+        verify(controlUserUseCase).execute(userId, UUID.fromString(TENANT), ControlUserUseCase.Action.ACTIVATE);
+        verify(controlUserUseCase).execute(userId, UUID.fromString(TENANT), ControlUserUseCase.Action.SUSPEND);
+        verify(controlUserUseCase).execute(userId, UUID.fromString(TENANT), ControlUserUseCase.Action.DEACTIVATE);
     }
 
     @Test
     @DisplayName("a control endpoint surfaces an illegal transition")
     void controlIllegal() {
-        when(controlUserUseCase.execute(userId, ControlUserUseCase.Action.SUSPEND))
+        when(controlUserUseCase.execute(userId, UUID.fromString(TENANT), ControlUserUseCase.Action.SUSPEND))
                 .thenReturn(Mono.error(new InvalidUserStatusException("illegal")));
 
-        StepVerifier.create(controller.controlSuspend(userId, EXECUTOR)).expectError(InvalidUserStatusException.class).verify();
+        StepVerifier.create(controller.controlSuspend(userId, TENANT, EXECUTOR)).expectError(InvalidUserStatusException.class).verify();
     }
 }

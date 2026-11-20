@@ -61,7 +61,7 @@ class UserCreationIT implements TestPropertyProvider {
         User created = writer.createAndPublish(user).block();
 
         assertEquals(user.getId(), created.getId());
-        assertNotNull(users.findById(user.getId()).block());
+        assertNotNull(users.findById(user.getId(), user.getOrganisationId()).block());
         List<Document> events = Flux.from(mongoClient.getDatabase(DATABASE).getCollection("outbox_events")
                 .find(Filters.eq("subject", "thinklab.party-authentication.user.initiated"))).collectList().block();
         assertTrue(events.stream().anyMatch(e -> e.getString("payloadJson").contains(user.getId().toString())),

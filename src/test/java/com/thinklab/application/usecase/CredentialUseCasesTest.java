@@ -63,7 +63,7 @@ class CredentialUseCasesTest {
     @Test
     @DisplayName("an administrator, a service or the user themselves may set the credential; the hash is stored")
     void capturesCredential() {
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
 
         StepVerifier.create(capture().execute(tenant, userId, "admin-1", "ADMIN", newPassword)).verifyComplete();
         StepVerifier.create(capture().execute(tenant, userId, "svc", "SERVICE", newPassword)).verifyComplete();
@@ -85,19 +85,20 @@ class CredentialUseCasesTest {
     @Test
     @DisplayName("an unknown user or a user of another tenant is not found")
     void notFound() {
-        when(users.findById(userId)).thenReturn(Mono.empty());
+        when(users.findById(userId, tenant)).thenReturn(Mono.empty());
         StepVerifier.create(capture().execute(tenant, userId, "admin", "ADMIN", newPassword))
                 .expectError(UserNotFoundException.class).verify();
 
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
-        StepVerifier.create(capture().execute(UUID.randomUUID(), userId, "admin", "ADMIN", newPassword))
+        UUID anotherTenant = UUID.randomUUID();
+        when(users.findById(userId, anotherTenant)).thenReturn(Mono.empty());
+        StepVerifier.create(capture().execute(anotherTenant, userId, "admin", "ADMIN", newPassword))
                 .expectError(UserNotFoundException.class).verify();
     }
 
     @Test
     @DisplayName("a deactivated user cannot receive a credential")
     void deactivated() {
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.DEACTIVATED, UserRole.ADMIN)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.DEACTIVATED, UserRole.ADMIN)));
 
         StepVerifier.create(capture().execute(tenant, userId, "admin", "ADMIN", newPassword))
                 .expectError(InvalidUserStatusException.class).verify();

@@ -51,7 +51,7 @@ PENDING | ACTIVE | SUSPENDED -> DEACTIVATED (terminal, no exit, no DELETE)
 
 ## BIAN Behavior Qualifier Contract (`/party-authentication/v1`)
 
-`X-Tenant-Id` (Organisation UUID) is mandatory on `initiate` and the collection `retrieve`;
+`X-Tenant-Id` (Organisation UUID) is mandatory on every route that takes a user (ADR-023: another tenant's user is a 404) and on `initiate` and the collection `retrieve`;
 `X-Executor` is mandatory on every mutation. There is no `DELETE`.
 
 | Behavior Qualifier | Method & Path |

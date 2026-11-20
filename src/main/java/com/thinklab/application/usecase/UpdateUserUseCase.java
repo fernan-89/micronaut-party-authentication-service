@@ -28,10 +28,10 @@ public class UpdateUserUseCase {
         this.userRepository = userRepository;
     }
 
-    public Mono<Void> execute(UUID id, UpdateUserRequest request) {
+    public Mono<Void> execute(UUID id, UUID organisationId, UpdateUserRequest request) {
         log.info("[USE CASE] Updating basic info for user ID: {}", id);
 
-        return userRepository.findById(id)
+        return userRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new UserNotFoundException(id)))
                 .flatMap(user -> {
                     user.updateProfile(request.fullName(), request.role());

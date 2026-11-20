@@ -83,10 +83,10 @@ public class UserController {
 
     /** Behavior Qualifier: {@code retrieve}. Fetches a single User by UUID. */
     @Get("/{id}/retrieve")
-    public Mono<HttpResponse<UserResponse>> retrieveById(@PathVariable UUID id) {
+    public Mono<HttpResponse<UserResponse>> retrieveById(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId) {
         log.info("[ACTION: RETRIEVE_USER] Received request to get user by ID: {}", id);
 
-        return retrieveUserUseCase.execute(id).map(HttpResponse::ok);
+        return retrieveUserUseCase.execute(id, UUID.fromString(tenantId)).map(HttpResponse::ok);
     }
 
     /** Behavior Qualifier: {@code retrieve} (collection). Lists Users scoped to a tenant. */
@@ -103,36 +103,36 @@ public class UserController {
     /** Behavior Qualifier: {@code update}. Updates basic User info. */
     @Put("/{id}/update")
     public Mono<HttpResponse<Void>> update(
-            @PathVariable UUID id,
+            @PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId,
             @Header(EXECUTOR_HEADER) @NotBlank String executor,
             @Body @Valid UpdateUserRequest request
     ) {
         log.info("[ACTION: UPDATE_USER] [EXECUTOR: {}] Received request to update user info for ID: {}", executor, id);
 
-        return updateUserUseCase.execute(id, request).thenReturn(HttpResponse.noContent());
+        return updateUserUseCase.execute(id, UUID.fromString(tenantId), request).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/activate}. */
     @Put("/{id}/control/activate")
-    public Mono<HttpResponse<Void>> controlActivate(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+    public Mono<HttpResponse<Void>> controlActivate(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
         log.info("[ACTION: CONTROL_USER] [EXECUTOR: {}] activate for ID: {}", executor, id);
 
-        return controlUserUseCase.execute(id, ControlUserUseCase.Action.ACTIVATE).thenReturn(HttpResponse.noContent());
+        return controlUserUseCase.execute(id, UUID.fromString(tenantId), ControlUserUseCase.Action.ACTIVATE).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/suspend}. */
     @Put("/{id}/control/suspend")
-    public Mono<HttpResponse<Void>> controlSuspend(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+    public Mono<HttpResponse<Void>> controlSuspend(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
         log.info("[ACTION: CONTROL_USER] [EXECUTOR: {}] suspend for ID: {}", executor, id);
 
-        return controlUserUseCase.execute(id, ControlUserUseCase.Action.SUSPEND).thenReturn(HttpResponse.noContent());
+        return controlUserUseCase.execute(id, UUID.fromString(tenantId), ControlUserUseCase.Action.SUSPEND).thenReturn(HttpResponse.noContent());
     }
 
     /** Behavior Qualifier: {@code control/deactivate}. Terminal, soft — no physical DELETE exists. */
     @Put("/{id}/control/deactivate")
-    public Mono<HttpResponse<Void>> controlDeactivate(@PathVariable UUID id, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
+    public Mono<HttpResponse<Void>> controlDeactivate(@PathVariable UUID id, @Header(TENANT_HEADER) @NotBlank String tenantId, @Header(EXECUTOR_HEADER) @NotBlank String executor) {
         log.info("[ACTION: CONTROL_USER] [EXECUTOR: {}] deactivate for ID: {}", executor, id);
 
-        return controlUserUseCase.execute(id, ControlUserUseCase.Action.DEACTIVATE).thenReturn(HttpResponse.noContent());
+        return controlUserUseCase.execute(id, UUID.fromString(tenantId), ControlUserUseCase.Action.DEACTIVATE).thenReturn(HttpResponse.noContent());
     }
 }

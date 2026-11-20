@@ -63,7 +63,7 @@ public class RefreshSessionUseCase {
                 log.warn("[SECURITY] Refresh token reuse detected for session {}: revoking the session.", record.sessionId());
                 return sessionRevoker.revoke(record.sessionId()).then(Mono.<SessionResponse>error(new InvalidCredentialsException()));
             }
-            return userRepository.findById(record.userId())
+            return userRepository.findById(record.userId(), record.organisationId())
                     .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                     .switchIfEmpty(Mono.defer(() -> sessionRevoker.revoke(record.sessionId()).then(Mono.error(new InvalidCredentialsException()))))
                     .flatMap(user -> sessionIssuer.issue(user, record.sessionId()));

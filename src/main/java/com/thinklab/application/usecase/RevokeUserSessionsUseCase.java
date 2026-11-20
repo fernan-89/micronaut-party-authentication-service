@@ -28,8 +28,7 @@ public class RevokeUserSessionsUseCase {
         if (role != null && !"ADMIN".equals(role) && !"SERVICE".equals(role) && !userId.toString().equals(executor)) {
             return Mono.error(new OperationForbiddenException("Only an administrator or the user themselves may revoke these sessions."));
         }
-        return userRepository.findById(userId)
-                .filter(user -> user.getOrganisationId().equals(tenantId))
+        return userRepository.findById(userId, tenantId)
                 .switchIfEmpty(Mono.error(new UserNotFoundException(userId)))
                 .flatMap(user -> sessionRevoker.revokeAllOf(userId));
     }

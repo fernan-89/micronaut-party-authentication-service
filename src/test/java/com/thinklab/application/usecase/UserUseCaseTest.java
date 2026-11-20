@@ -81,9 +81,9 @@ class UserUseCaseTest {
     @Test
     void testRetrieveUserUseCaseSuccess() {
         RetrieveUserUseCase useCase = new RetrieveUserUseCase(userRepository);
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
 
-        StepVerifier.create(useCase.execute(userId))
+        StepVerifier.create(useCase.execute(userId, organisationId))
                 .assertNext(res -> assertEquals("Ada Lovelace", res.fullName()))
                 .verifyComplete();
     }
@@ -91,9 +91,9 @@ class UserUseCaseTest {
     @Test
     void testRetrieveUserUseCaseNotFound() {
         RetrieveUserUseCase useCase = new RetrieveUserUseCase(userRepository);
-        when(userRepository.findById(userId)).thenReturn(Mono.empty());
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.empty());
 
-        StepVerifier.create(useCase.execute(userId))
+        StepVerifier.create(useCase.execute(userId, organisationId))
                 .expectError(UserNotFoundException.class)
                 .verify();
     }
@@ -112,20 +112,20 @@ class UserUseCaseTest {
     void testUpdateUserUseCase() {
         UpdateUserUseCase useCase = new UpdateUserUseCase(userRepository);
         UpdateUserRequest request = new UpdateUserRequest("Ada L.", UserRole.ADMIN);
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
         when(userRepository.updateBasicInfo(userId, "Ada L.", UserRole.ADMIN)).thenReturn(Mono.empty());
 
-        StepVerifier.create(useCase.execute(userId, request))
+        StepVerifier.create(useCase.execute(userId, organisationId, request))
                 .verifyComplete();
     }
 
     @Test
     void testControlUserUseCaseActivate() {
         ControlUserUseCase useCase = new ControlUserUseCase(userRepository, noopRevoker());
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
         when(userRepository.updateStatus(userId, UserStatus.ACTIVE)).thenReturn(Mono.empty());
 
-        StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.ACTIVATE))
+        StepVerifier.create(useCase.execute(userId, organisationId, ControlUserUseCase.Action.ACTIVATE))
                 .verifyComplete();
     }
 
@@ -134,9 +134,9 @@ class UserUseCaseTest {
         ControlUserUseCase useCase = new ControlUserUseCase(userRepository, noopRevoker());
         user.activate();
         user.deactivate();
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
 
-        StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.ACTIVATE))
+        StepVerifier.create(useCase.execute(userId, organisationId, ControlUserUseCase.Action.ACTIVATE))
                 .expectError(InvalidUserStatusException.class)
                 .verify();
     }
@@ -145,5 +145,17 @@ class UserUseCaseTest {
         SessionRevoker revoker = org.mockito.Mockito.mock(SessionRevoker.class);
         org.mockito.Mockito.lenient().when(revoker.revokeAllOf(org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         return revoker;
+    }
+
+    @Test
+    void anotherTenantsUserIsTheSameAsNone() {
+        UUID other = UUID.randomUUID();
+        when(userRepository.findById(userId, other)).thenReturn(Mono.empty());
+
+        StepVerifier.create(new RetrieveUserUseCase(userRepository).execute(userId, other)).expectError(UserNotFoundException.class).verify();
+        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, other, new UpdateUserRequest("x", UserRole.ADMIN))).expectError(UserNotFoundException.class).verify();
+        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, other, ControlUserUseCase.Action.SUSPEND)).expectError(UserNotFoundException.class).verify();
+
+        org.mockito.Mockito.verifyNoMoreInteractions(userRepository);
     }
 }

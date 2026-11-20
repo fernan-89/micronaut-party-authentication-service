@@ -25,10 +25,10 @@ public class RetrieveUserUseCase {
         this.userRepository = userRepository;
     }
 
-    public Mono<UserResponse> execute(UUID id) {
+    public Mono<UserResponse> execute(UUID id, UUID organisationId) {
         log.info("[USE CASE] Retrieving user with ID: {}", id);
 
-        return userRepository.findById(id)
+        return userRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new UserNotFoundException(id)))
                 .map(UserMapper::toResponse);
     }

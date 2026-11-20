@@ -20,6 +20,10 @@ import java.util.UUID;
 @MongoRepository
 public interface UserMongoRepository extends ReactorCrudRepository<UserEntity, UUID> {
 
+    /** The only by-id lookup of the service: a user of another organisation is the same as none (ADR-023). */
+    Mono<UserEntity> findByIdAndOrganisationId(UUID id, UUID organisationId);
+
+
     Mono<Boolean> existsByOrganisationIdAndEmail(UUID organisationId, String email);
 
     Mono<UserEntity> findByOrganisationIdAndEmail(UUID organisationId, String email);

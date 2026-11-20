@@ -80,21 +80,24 @@ class UserMongoRepositoryAdapterTest {
     }
 
     @Test
-    @DisplayName("findById maps the entity to the aggregate, or completes empty")
+    @DisplayName("findById looks the user up in the caller's organisation only, and maps it, or completes empty")
     void findById() {
-        when(repository.findById(userId)).thenReturn(Mono.just(entity)).thenReturn(Mono.empty());
+        UUID organisationId = UUID.randomUUID();
+        when(repository.findByIdAndOrganisationId(userId, organisationId)).thenReturn(Mono.just(entity)).thenReturn(Mono.empty());
 
-        StepVerifier.create(adapter.findById(userId))
+        StepVerifier.create(adapter.findById(userId, organisationId))
                 .expectNextMatches(user -> user.getId().equals(userId) && user.getStatus() == UserStatus.ACTIVE
                         && user.getRole() == UserRole.OPERATOR)
                 .verifyComplete();
-        StepVerifier.create(adapter.findById(userId)).verifyComplete();
+        StepVerifier.create(adapter.findById(userId, organisationId)).verifyComplete();
+        verify(repository, never()).findById(any(UUID.class));
     }
 
     @Test
-    @DisplayName("findById requires an identifier")
-    void findByIdRequiresId() {
-        assertThrows(NullPointerException.class, () -> adapter.findById(null));
+    @DisplayName("findById requires both identifiers")
+    void findByIdRequiresIds() {
+        assertThrows(NullPointerException.class, () -> adapter.findById(null, UUID.randomUUID()));
+        assertThrows(NullPointerException.class, () -> adapter.findById(userId, null));
     }
 
     @Test

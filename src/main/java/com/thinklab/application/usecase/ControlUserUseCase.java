@@ -34,10 +34,10 @@ public class ControlUserUseCase {
         this.sessionRevoker = sessionRevoker;
     }
 
-    public Mono<Void> execute(UUID id, Action action) {
+    public Mono<Void> execute(UUID id, UUID organisationId, Action action) {
         log.info("[USE CASE] Controlling user lifecycle: {} for ID: {}", action, id);
 
-        return userRepository.findById(id)
+        return userRepository.findById(id, organisationId)
                 .switchIfEmpty(Mono.error(new UserNotFoundException(id)))
                 .flatMap(user -> {
                     action.apply(user);

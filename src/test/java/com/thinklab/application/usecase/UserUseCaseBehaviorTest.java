@@ -113,10 +113,10 @@ class UserUseCaseBehaviorTest {
     @Test
     @DisplayName("Update: loads the aggregate, applies the domain change, then issues the granular update")
     void updateLoadsThenPersists() {
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
         when(userRepository.updateBasicInfo(userId, "Ada L.", UserRole.ADMIN)).thenReturn(Mono.empty());
 
-        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, new UpdateUserRequest("Ada L.", UserRole.ADMIN)))
+        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, organisationId, new UpdateUserRequest("Ada L.", UserRole.ADMIN)))
                 .verifyComplete();
 
         verify(userRepository).updateBasicInfo(userId, "Ada L.", UserRole.ADMIN);
@@ -125,9 +125,9 @@ class UserUseCaseBehaviorTest {
     @Test
     @DisplayName("Update: 404 when the user does not exist, and nothing is written")
     void updateNotFound() {
-        when(userRepository.findById(userId)).thenReturn(Mono.empty());
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.empty());
 
-        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, new UpdateUserRequest("x", UserRole.ADMIN)))
+        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, organisationId, new UpdateUserRequest("x", UserRole.ADMIN)))
                 .expectError(UserNotFoundException.class)
                 .verify();
 
@@ -138,9 +138,9 @@ class UserUseCaseBehaviorTest {
     @DisplayName("Update: a DEACTIVATED user cannot be edited and nothing is written")
     void updateRejectedForDeactivatedUser() {
         user.deactivate();
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
 
-        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, new UpdateUserRequest("x", UserRole.ADMIN)))
+        StepVerifier.create(new UpdateUserUseCase(userRepository).execute(userId, organisationId, new UpdateUserRequest("x", UserRole.ADMIN)))
                 .expectError(InvalidUserStatusException.class)
                 .verify();
 
@@ -151,13 +151,13 @@ class UserUseCaseBehaviorTest {
     @DisplayName("Control: SUSPEND and DEACTIVATE drive the matching persistence updates")
     void controlSuspendAndDeactivate() {
         user.activate();
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
         when(userRepository.updateStatus(userId, UserStatus.SUSPENDED)).thenReturn(Mono.empty());
         when(userRepository.updateStatus(userId, UserStatus.DEACTIVATED)).thenReturn(Mono.empty());
         ControlUserUseCase useCase = new ControlUserUseCase(userRepository, noopRevoker());
 
-        StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.SUSPEND)).verifyComplete();
-        StepVerifier.create(useCase.execute(userId, ControlUserUseCase.Action.DEACTIVATE)).verifyComplete();
+        StepVerifier.create(useCase.execute(userId, organisationId, ControlUserUseCase.Action.SUSPEND)).verifyComplete();
+        StepVerifier.create(useCase.execute(userId, organisationId, ControlUserUseCase.Action.DEACTIVATE)).verifyComplete();
 
         verify(userRepository).updateStatus(userId, UserStatus.SUSPENDED);
         verify(userRepository).updateStatus(userId, UserStatus.DEACTIVATED);
@@ -166,9 +166,9 @@ class UserUseCaseBehaviorTest {
     @Test
     @DisplayName("Control: 404 when the user does not exist")
     void controlNotFound() {
-        when(userRepository.findById(userId)).thenReturn(Mono.empty());
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.empty());
 
-        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, ControlUserUseCase.Action.ACTIVATE))
+        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, organisationId, ControlUserUseCase.Action.ACTIVATE))
                 .expectError(UserNotFoundException.class)
                 .verify();
     }
@@ -176,9 +176,9 @@ class UserUseCaseBehaviorTest {
     @Test
     @DisplayName("Control: an illegal move (SUSPEND a PENDING user) never reaches the repository")
     void controlIllegalMoveNeverWrites() {
-        when(userRepository.findById(userId)).thenReturn(Mono.just(user));
+        when(userRepository.findById(userId, organisationId)).thenReturn(Mono.just(user));
 
-        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, ControlUserUseCase.Action.SUSPEND))
+        StepVerifier.create(new ControlUserUseCase(userRepository, noopRevoker()).execute(userId, organisationId, ControlUserUseCase.Action.SUSPEND))
                 .expectError(InvalidUserStatusException.class)
                 .verify();
 
