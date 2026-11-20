@@ -151,7 +151,7 @@ class SessionUseCasesTest {
         when(sessions.findRefreshToken(SessionIssuer.hash("raw"))).thenReturn(Mono.just(stored("raw", NOW.plusSeconds(60))));
         when(sessions.isSessionRevoked("sess-1")).thenReturn(Mono.just(false));
         when(sessions.markRefreshTokenUsed(SessionIssuer.hash("raw"))).thenReturn(Mono.just(true));
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
 
         StepVerifier.create(refresh().execute("raw"))
                 .assertNext(response -> assertNotEquals("raw", response.refreshToken()))
@@ -195,10 +195,10 @@ class SessionUseCasesTest {
         when(sessions.findRefreshToken(SessionIssuer.hash("raw"))).thenReturn(Mono.just(stored("raw", NOW.plusSeconds(60))));
         when(sessions.isSessionRevoked("sess-1")).thenReturn(Mono.just(false));
         when(sessions.markRefreshTokenUsed(SessionIssuer.hash("raw"))).thenReturn(Mono.just(true));
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.SUSPENDED, UserRole.ADMIN)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.SUSPENDED, UserRole.ADMIN)));
         StepVerifier.create(refresh().execute("raw")).expectError(InvalidCredentialsException.class).verify();
 
-        when(users.findById(userId)).thenReturn(Mono.empty());
+        when(users.findById(userId, tenant)).thenReturn(Mono.empty());
         StepVerifier.create(refresh().execute("raw")).expectError(InvalidCredentialsException.class).verify();
 
         verify(sessions, times(2)).revokeSession("sess-1", NOW);
@@ -219,7 +219,7 @@ class SessionUseCasesTest {
     @DisplayName("a service opens a session for an ACTIVE user of that organisation, with the same tokens a password login produces; with no role (security off) nothing is enforced")
     void federatedSession() {
         InitiateFederatedSessionUseCase useCase = new InitiateFederatedSessionUseCase(users, issuer);
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
         FederatedSessionRequest request = new FederatedSessionRequest(tenant, userId);
 
         StepVerifier.create(useCase.execute(request, "SERVICE")).assertNext(session -> {
@@ -238,12 +238,13 @@ class SessionUseCasesTest {
         StepVerifier.create(useCase.execute(request, "ADMIN")).expectError(OperationForbiddenException.class).verify();
         StepVerifier.create(useCase.execute(request, "OPERATOR")).expectError(OperationForbiddenException.class).verify();
 
-        when(users.findById(userId)).thenReturn(Mono.empty());
+        when(users.findById(userId, tenant)).thenReturn(Mono.empty());
         StepVerifier.create(useCase.execute(request, "SERVICE")).expectError(InvalidCredentialsException.class).verify();
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.SUSPENDED, UserRole.ADMIN)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.SUSPENDED, UserRole.ADMIN)));
         StepVerifier.create(useCase.execute(request, "SERVICE")).expectError(InvalidCredentialsException.class).verify();
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
-        StepVerifier.create(useCase.execute(new FederatedSessionRequest(UUID.randomUUID(), userId), "SERVICE")).expectError(InvalidCredentialsException.class).verify();
+        UUID foreign = UUID.randomUUID();
+        when(users.findById(userId, foreign)).thenReturn(Mono.empty());
+        StepVerifier.create(useCase.execute(new FederatedSessionRequest(foreign, userId), "SERVICE")).expectError(InvalidCredentialsException.class).verify();
 
         verify(sessions, never()).saveRefreshToken(any());
     }
@@ -268,7 +269,7 @@ class SessionUseCasesTest {
     @Test
     @DisplayName("an administrator, a service, the user themselves or a dev caller may force a logout")
     void forcedLogout() {
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
         when(sessions.findSessionIdsByUserId(userId)).thenReturn(Flux.just("a"));
         RevokeUserSessionsUseCase useCase = new RevokeUserSessionsUseCase(users, revoker);
 
@@ -286,10 +287,11 @@ class SessionUseCasesTest {
         RevokeUserSessionsUseCase useCase = new RevokeUserSessionsUseCase(users, revoker);
         StepVerifier.create(useCase.execute(tenant, userId, "someone", "OPERATOR")).expectError(OperationForbiddenException.class).verify();
 
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.OPERATOR)));
-        StepVerifier.create(useCase.execute(UUID.randomUUID(), userId, "admin", "ADMIN")).expectError(UserNotFoundException.class).verify();
+        UUID foreign = UUID.randomUUID();
+        when(users.findById(userId, foreign)).thenReturn(Mono.empty());
+        StepVerifier.create(useCase.execute(foreign, userId, "admin", "ADMIN")).expectError(UserNotFoundException.class).verify();
 
-        when(users.findById(userId)).thenReturn(Mono.empty());
+        when(users.findById(userId, tenant)).thenReturn(Mono.empty());
         StepVerifier.create(useCase.execute(tenant, userId, "admin", "ADMIN")).expectError(UserNotFoundException.class).verify();
     }
 
@@ -326,12 +328,12 @@ class SessionUseCasesTest {
         when(users.updateStatus(any(), any())).thenReturn(Mono.empty());
         ControlUserUseCase control = new ControlUserUseCase(users, mockRevoker);
 
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
-        StepVerifier.create(control.execute(userId, ControlUserUseCase.Action.SUSPEND)).verifyComplete();
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
-        StepVerifier.create(control.execute(userId, ControlUserUseCase.Action.DEACTIVATE)).verifyComplete();
-        when(users.findById(userId)).thenReturn(Mono.just(user(UserStatus.PENDING, UserRole.ADMIN)));
-        StepVerifier.create(control.execute(userId, ControlUserUseCase.Action.ACTIVATE)).verifyComplete();
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
+        StepVerifier.create(control.execute(userId, tenant, ControlUserUseCase.Action.SUSPEND)).verifyComplete();
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.ACTIVE, UserRole.ADMIN)));
+        StepVerifier.create(control.execute(userId, tenant, ControlUserUseCase.Action.DEACTIVATE)).verifyComplete();
+        when(users.findById(userId, tenant)).thenReturn(Mono.just(user(UserStatus.PENDING, UserRole.ADMIN)));
+        StepVerifier.create(control.execute(userId, tenant, ControlUserUseCase.Action.ACTIVATE)).verifyComplete();
 
         verify(mockRevoker, times(2)).revokeAllOf(userId);
     }

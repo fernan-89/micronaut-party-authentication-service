@@ -46,10 +46,11 @@ public class UserMongoRepositoryAdapter implements UserRepository {
     }
 
     @Override
-    public Mono<User> findById(UUID id) {
+    public Mono<User> findById(UUID id, UUID organisationId) {
         Objects.requireNonNull(id, "Infrastructure constraint violated: Identifier UUID is mandatory for retrieval.");
+        Objects.requireNonNull(organisationId, "Infrastructure constraint violated: Organisation UUID is mandatory for retrieval.");
 
-        return repository.findById(id).map(UserEntity::toDomain);
+        return repository.findByIdAndOrganisationId(id, organisationId).map(UserEntity::toDomain);
     }
 
     @Override

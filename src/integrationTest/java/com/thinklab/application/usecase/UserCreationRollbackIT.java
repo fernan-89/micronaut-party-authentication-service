@@ -49,6 +49,6 @@ class UserCreationRollbackIT implements TestPropertyProvider {
         IllegalStateException failure = assertThrows(IllegalStateException.class, () -> writer.createAndPublish(user).block());
 
         assertEquals("outbox unavailable", failure.getMessage());
-        assertNull(users.findById(user.getId()).block());
+        assertNull(users.findById(user.getId(), user.getOrganisationId()).block());
     }
 }

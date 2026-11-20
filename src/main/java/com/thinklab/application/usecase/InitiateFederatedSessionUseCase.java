@@ -39,8 +39,8 @@ public class InitiateFederatedSessionUseCase {
         if (role != null && !"SERVICE".equals(role)) {
             return Mono.error(new OperationForbiddenException("Only a service may open a federated session."));
         }
-        return userRepository.findById(request.userId())
-                .filter(user -> user.getOrganisationId().equals(request.organisationId()) && user.getStatus() == UserStatus.ACTIVE)
+        return userRepository.findById(request.userId(), request.organisationId())
+                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .switchIfEmpty(Mono.error(new InvalidCredentialsException()))
                 .flatMap(user -> sessionIssuer.issue(user, UUID.randomUUID().toString()))
                 .doOnError(error -> log.warn("[USE CASE] Federated session rejected for organisation {}", request.organisationId()));

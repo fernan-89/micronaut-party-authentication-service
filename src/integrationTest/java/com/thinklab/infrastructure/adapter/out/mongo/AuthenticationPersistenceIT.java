@@ -88,7 +88,8 @@ class AuthenticationPersistenceIT implements TestPropertyProvider {
         User other = users.create(newUser(organisation)).block();
         users.create(newUser(UUID.randomUUID())).block();
 
-        assertEquals(ada.getEmail(), users.findById(ada.getId()).block().getEmail());
+        assertEquals(ada.getEmail(), users.findById(ada.getId(), organisation).block().getEmail());
+        assertNull(users.findById(ada.getId(), UUID.randomUUID()).block(), "a user of another organisation is the same as none");
         assertTrue(users.existsByOrganisationIdAndEmail(organisation, ada.getEmail()).block());
         assertFalse(users.existsByOrganisationIdAndEmail(UUID.randomUUID(), ada.getEmail()).block());
         assertEquals(ada.getId(), users.findByOrganisationIdAndEmail(organisation, ada.getEmail()).block().getId());
@@ -100,7 +101,7 @@ class AuthenticationPersistenceIT implements TestPropertyProvider {
                 users.findAllByOrganisationId(organisation, null).map(User::getId).collect(Collectors.toSet()).block());
         assertEquals(List.of(other.getId()),
                 users.findAllByOrganisationId(organisation, UserStatus.ACTIVE).map(User::getId).collectList().block());
-        User updated = users.findById(ada.getId()).block();
+        User updated = users.findById(ada.getId(), organisation).block();
         assertEquals("Ada King", updated.getFullName());
         assertEquals(UserRole.VIEWER, updated.getRole());
     }
